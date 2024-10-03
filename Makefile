@@ -71,7 +71,7 @@ install:
 	$(q)if [ -d $(out-dir)/ta ]; then mkdir -p ${DESTDIR}/lib/optee_armtz; find $(out-dir)/ta -name \*.ta -exec cp -a {} ${DESTDIR}/lib/optee_armtz \; ;fi
 	$(echo) '  INSTALL ${DESTDIR}/usr/bin'
 	$(q)mkdir -p ${DESTDIR}/usr/bin
-	$(q)cp -a $(out-dir)/fde_key_manager/fde-key-manager ${DESTDIR}/usr/bin
-	$(q)cp -a $(out-dir)/fde_key_manager/fde-reveal-key ${DESTDIR}/usr/bin
-	$(q)cp -a $(out-dir)/fde_key_manager/fde-setup ${DESTDIR}/usr/bin
-	$(q)cp -a $(out-dir)/fde_key_manager/fde-helper ${DESTDIR}/usr/bin
+	$(q)if [ -e $(out-dir)/fde_key_manager/fde-key-manager ]; then cp -a $(out-dir)/fde_key_manager/fde-key-manager ${DESTDIR}/usr/bin; fi
+	$(q)if [ -e $(out-dir)/fde_key_manager/fde-reveal-key ]; then cp -a $(out-dir)/fde_key_manager/fde-reveal-key ${DESTDIR}/usr/bin; fi
+	$(q)if [ -e $(out-dir)/fde_key_manager/fde-setup ]; then cp -a $(out-dir)/fde_key_manager/fde-setup ${DESTDIR}/usr/bin; fi
+	$(q)if [ -e $(out-dir)/fde_key_manager/fde-helper ]; then cp -a $(out-dir)/fde_key_manager/fde-helper ${DESTDIR}/usr/bin; fi
