@@ -83,12 +83,12 @@ static TEE_Result derive_ta_unique_key(uint8_t *key,
 }
 
 static TEE_Result do_key_encrypt( TEE_OperationHandle crypto_op,
-                                  uint8_t *key, uint32_t key_sz,
-                                  uint8_t *enc_key, uint32_t *enc_key_sz,
+                                  uint8_t *key, size_t key_sz,
+                                  uint8_t *enc_key, size_t *enc_key_sz,
                                   struct key_handle *handle) {
 
     TEE_Result res = TEE_ERROR_GENERIC;
-    uint32_t tag_len = TAG_SIZE;
+    size_t tag_len = TAG_SIZE;
 
     res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
     if (res) {
@@ -99,7 +99,7 @@ static TEE_Result do_key_encrypt( TEE_OperationHandle crypto_op,
     res = TEE_AEEncryptFinal(crypto_op, key, key_sz, enc_key,
                              enc_key_sz, handle->tag, &tag_len);
     if (res || tag_len != TAG_SIZE || *enc_key_sz != key_sz) {
-      EMSG("fde_key_handler: key encrypt failed: [%"PRIu32", %"PRIu32"], [%"PRIu32", %"PRIu32"], %#"PRIx32"\n",
+      EMSG("fde_key_handler: key encrypt failed: [%"PRIu64", %"PRIu32"], [%"PRIu64", %"PRIu64"], %#"PRIx32"\n",
             tag_len, TAG_SIZE, *enc_key_sz, key_sz, res);
       res = res ? res: TEE_ERROR_SECURITY;
     }
@@ -108,8 +108,8 @@ static TEE_Result do_key_encrypt( TEE_OperationHandle crypto_op,
 }
 
 static TEE_Result do_key_decrypt( TEE_OperationHandle crypto_op,
-                                  uint8_t *enc_key, uint32_t enc_key_sz,
-                                  uint8_t *key, uint32_t *key_sz,
+                                  uint8_t *enc_key, size_t enc_key_sz,
+                                  uint8_t *key, size_t *key_sz,
                                   struct key_handle *handle) {
 
     TEE_Result res = TEE_ERROR_GENERIC;
@@ -126,7 +126,7 @@ static TEE_Result do_key_decrypt( TEE_OperationHandle crypto_op,
            key_sz, tag, TAG_SIZE);
 
     if (res || enc_key_sz != *key_sz) {
-      EMSG("fde_key_handler: key decrypt failed: [%"PRIx32", %"PRIx32"], %#"PRIx32"\n",
+      EMSG("fde_key_handler: key decrypt failed: [%"PRIx64", %"PRIx64"], %#"PRIx32"\n",
            enc_key_sz, *key_sz, res);
       res = res ? res: TEE_ERROR_SECURITY;
     }
@@ -135,8 +135,8 @@ static TEE_Result do_key_decrypt( TEE_OperationHandle crypto_op,
 }
 
 static TEE_Result do_key_crypto( TEE_OperationMode mode,
-                                 uint8_t *in, uint32_t in_size,
-                                 uint8_t *out, uint32_t *out_size,
+                                 uint8_t *in, size_t in_size,
+                                 uint8_t *out, size_t *out_size,
                                  struct key_handle *handle) {
 
     TEE_Result res = TEE_ERROR_GENERIC;
@@ -195,9 +195,9 @@ TEE_Result key_crypto( TEE_OperationMode mode,
 
     TEE_Result res = TEE_SUCCESS;
     uint8_t *in = NULL;
-    uint32_t in_size = 0;
+    size_t in_size = 0;
     uint8_t *out = NULL;
-    uint32_t out_size = 0;
+    size_t out_size = 0;
     struct key_handle * handle = NULL;
     uint8_t *handle_buf = NULL;
     uint32_t handle_buf_size = 0;
