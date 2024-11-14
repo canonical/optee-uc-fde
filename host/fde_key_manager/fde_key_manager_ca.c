@@ -12,7 +12,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
-#include <tee_api_defines.h>
 #include "tee_client_api.h"
 #include <unistd.h>
 
@@ -122,7 +121,7 @@ TEEC_Result encrypt_key(unsigned char *in_buf, size_t in_buf_len,
     operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
                                             TEEC_MEMREF_TEMP_OUTPUT,
                                             TEEC_MEMREF_TEMP_OUTPUT,
-                                            TEE_PARAM_TYPE_NONE);
+                                            TEEC_NONE);
     operation.params[0].tmpref.size = in_buf_len;
     operation.params[0].tmpref.buffer = in_buf;
     operation.params[1].tmpref.size = *handle_len;
@@ -148,7 +147,7 @@ TEEC_Result decrypt_key(unsigned char *in_buf, size_t in_buf_len,
     operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
                                             TEEC_MEMREF_TEMP_INPUT,
                                             TEEC_MEMREF_TEMP_OUTPUT,
-                                            TEE_PARAM_TYPE_NONE);
+                                            TEEC_NONE);
     operation.params[0].tmpref.size = in_buf_len;
     operation.params[0].tmpref.buffer = in_buf;
     operation.params[1].tmpref.size = handle_len;
@@ -169,10 +168,10 @@ TEEC_Result get_ta_lock(uint32_t *value) {
 
     memset(&operation, 0x0, sizeof(operation));
     operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEE_PARAM_TYPE_VALUE_OUTPUT,
-                                            TEE_PARAM_TYPE_NONE,
-                                            TEE_PARAM_TYPE_NONE,
-                                            TEE_PARAM_TYPE_NONE);
+    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_OUTPUT,
+                                            TEEC_NONE,
+                                            TEEC_NONE,
+                                            TEEC_NONE);
 
     ret = invode_command(TA_CMD_GET_LOCK, &operation);
     if (ret == TEEC_SUCCESS) {
@@ -186,10 +185,10 @@ TEEC_Result lock_ta() {
 
     memset(&operation, 0x0, sizeof(operation));
     operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEE_PARAM_TYPE_NONE,
-                                            TEE_PARAM_TYPE_NONE,
-                                            TEE_PARAM_TYPE_NONE,
-                                            TEE_PARAM_TYPE_NONE);
+    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_NONE,
+                                            TEEC_NONE,
+                                            TEEC_NONE,
+                                            TEEC_NONE);
 
     return invode_command(TA_CMD_LOCK, &operation);
 }
@@ -208,10 +207,10 @@ unsigned char *generate_rng(size_t len) {
 
     memset(&operation, 0x0, sizeof(operation));
     operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT,
-                                            TEE_PARAM_TYPE_NONE,
-                                            TEE_PARAM_TYPE_NONE,
-                                            TEE_PARAM_TYPE_NONE);
+    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_OUTPUT,
+                                            TEEC_NONE,
+                                            TEEC_NONE,
+                                            TEEC_NONE);
     operation.params[0].tmpref.size = len;
     operation.params[0].tmpref.buffer = buf;
     ret = invode_command(TA_CMD_GEN_RANDOM, &operation);
