@@ -53,6 +53,7 @@ static void print_help(void)
     printf("\t--generate-random [len in bytes]: generate random buffer and print it coded in base64\n");
     printf("\t\tby default 128bytes buffer is generated unless size is passed\n");
     printf("\t--encrypt-decrypt-selftest: encrypt and decrypt selftest\n");
+    printf("\t--get-ta-version: pring TA version.\n");
 }
 
 char *get_snap_hook_fde_setup_request(void) {
@@ -585,6 +586,7 @@ int main(int argc, char *argv[]) {
     char *baseName = NULL;
     char *request_str = NULL;
     size_t buf_len = 0;
+    uint32_t ta_version = 0;
     baseName = basename(argv[0]);
     ree_log(REE_INFO, "main: %s entry point", baseName);
     if (argc == 1) {
@@ -632,6 +634,7 @@ int main(int argc, char *argv[]) {
      *  --lock-ta: lock TA
      *  --generate-random: generate random number
      *  --enrypt-decrypt-selftest: encrypt and decrypt selftest
+     *  --get-ta-version: get version of the TA
      *  --help: print help
      */
     if (!strcmp("--ta-lock-status", argv[1])) {
@@ -672,6 +675,13 @@ int main(int argc, char *argv[]) {
         ret = encrypt_decrypt_selftest();
         if(ret != TEEC_SUCCESS) {
             printf("Failed to pass encrypt and decrypt selftest, ret 0x%x\n", ret);
+        }
+    } else if (!strcmp("--get-ta-version", argv[1])) {
+        ret = get_ta_version(&ta_version);
+        if(ret == TEEC_SUCCESS) {
+            printf("TA version: 0x%X\n", ta_version);
+        } else {
+            printf("Failed to get TA version, ret 0x%x\n", ret);
         }
     } else if (!strcmp("--help", argv[1])) {
         print_help();

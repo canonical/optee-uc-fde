@@ -66,6 +66,8 @@ TEE_Result TA_InvokeCommandEntryPoint( void __maybe_unused *session_context,
             return get_ta_lock(paramTypes, params);
         case TA_CMD_GEN_RANDOM:
             return generate_random(paramTypes, params);
+        case TA_CMD_TA_VERSION:
+            return get_ta_version(paramTypes, params);
         default:
             EMSG("fde_key_handler: Command ID %#"PRIx32" is not supported", cmd_id);
             return TEE_ERROR_NOT_SUPPORTED;

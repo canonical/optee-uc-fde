@@ -21,6 +21,7 @@ extern TEEC_Result decrypt_key(unsigned char *in_buf, size_t in_buf_len,
 extern TEEC_Result lock_ta();
 extern TEEC_Result get_ta_lock(uint32_t *value);
 extern unsigned char *generate_rng(size_t buf_len);
+extern TEEC_Result get_ta_version(uint32_t *version);
 
 // ree_log helper wrapper
 #define REE_ERROR   1

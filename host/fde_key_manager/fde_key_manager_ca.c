@@ -220,6 +220,24 @@ unsigned char *generate_rng(size_t len) {
     return buf;
 }
 
+TEEC_Result get_ta_version(uint32_t *version) {
+    TEEC_Operation operation;
+    TEEC_Result ret = TEEC_ERROR_GENERIC;
+
+    memset(&operation, 0x0, sizeof(operation));
+    operation.started = 1;
+    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_OUTPUT,
+                                            TEEC_NONE,
+                                            TEEC_NONE,
+                                            TEEC_NONE);
+
+    ret = invode_command(TA_CMD_TA_VERSION, &operation);
+    if (ret == TEEC_SUCCESS) {
+        *version = operation.params[0].value.a;
+    }
+    return ret;
+}
+
 void ree_log(int log_level, const char *format, ...) {
     va_list args;
     char buf[2048];

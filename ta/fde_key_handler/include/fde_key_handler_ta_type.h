@@ -16,6 +16,9 @@
 #define MAX_BUF_SIZE    512
 #define HANDLE_SIZE     65  // (version)(1), IV(16), NONCE(32), TAG(16)
 
+/* TA version allowing tracking of future functionality changes */
+#define FDE_TA_VERSION_V1   0x00010001
+
 /* Define the command index in this TA */
 
 /*
@@ -70,6 +73,14 @@
  *    params[1].memref.size: lenght of the buffer
  */
 #define TA_CMD_GEN_RANDOM             5U
+
+/*
+ * TA_CMD_VERSION return TA version
+ * Return the version of TA
+ * - TEE_PARAM_TYPE_MEMREF_OUTPUT
+ *    params[0].value.a: TA version as int
+ */
+#define TA_CMD_TA_VERSION                6U
 
 /* Define the debug flag */
 #define DEBUG
