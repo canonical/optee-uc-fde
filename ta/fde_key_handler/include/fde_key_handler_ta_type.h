@@ -69,8 +69,8 @@
  * TA_CMD_GEN_RANDOM generate random data
  * Generates rand data of given length
  * - TEE_PARAM_TYPE_MEMREF_OUTPUT
- *    params[1].memref.buffer: buffer to be filled with random data
- *    params[1].memref.size: lenght of the buffer
+ *    params[0].memref.buffer: buffer to be filled with random data
+ *    params[0].memref.size: lenght of the buffer
  */
 #define TA_CMD_GEN_RANDOM             5U
 
