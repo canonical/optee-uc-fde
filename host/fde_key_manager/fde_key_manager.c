@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright 2023, Canonical Ltd.
+ * Copyright 2025, Canonical Ltd.
  */
 
 #include <stdio.h>
@@ -56,7 +56,7 @@ static void print_help(void)
 }
 
 char *get_snap_hook_fde_setup_request(void) {
-    FILE *f;
+    FILE *f = NULL;
     char *request = NULL;
     char *pos = NULL;
 
@@ -84,7 +84,7 @@ char *get_snap_hook_fde_setup_request(void) {
 }
 
 int set_snap_hook_fde_setup_request_result(const unsigned char *result, int len) {
-    FILE *out_stream;
+    FILE *out_stream = NULL;
     int ret = EXIT_SUCCESS;
     // run snapctl
     out_stream = popen(SNAPCTL" fde-setup-result", "w");
@@ -105,7 +105,7 @@ int set_snap_hook_fde_setup_request_result(const unsigned char *result, int len)
 }
 
 int set_result(const unsigned char * result, int len) {
-    int ret;
+    int ret = 0;
     if (snapctl_output) {
         return set_snap_hook_fde_setup_request_result(result, len);
     } else {
@@ -120,7 +120,7 @@ int set_result(const unsigned char * result, int len) {
 
 char *get_initrd_fde_request() {
     size_t b_read = 0;
-    size_t size_remaining;
+    size_t size_remaining = 0;
     char *request = NULL;
     char *pos = NULL;
 
@@ -155,7 +155,7 @@ int handle_operation_reveal(struct json_object *request_json) {
     size_t handle_buf_len = 0;
     size_t unsealed_key_buf_len = 0;
     char *unsealed_key = NULL;
-    const char *result;
+    const char *result = NULL;
 
     // get other request data:
     //   FDE_JSON_SEALED_KEY | FDE_JSON_HANDLE
@@ -507,9 +507,9 @@ int handle_operation_feature(struct json_object *request_json) {
 }
 
 int handle_fde_operation(char *request_str) {
-    struct json_object *request_json;
-    struct json_object *j_op;
-    const char *op;
+    struct json_object *request_json = NULL;
+    struct json_object *j_op = NULL;
+    const char *op = NULL;
     json_bool j_ret;
     int ret = EXIT_SUCCESS;
 
@@ -579,7 +579,7 @@ int handle_fde_operation(char *request_str) {
  */
 int main(int argc, char *argv[]) {
     int ret = EXIT_SUCCESS;
-    uint32_t lock;
+    uint32_t lock = 0;
     unsigned char *buf = NULL;
     char *base64_buf = NULL;
     char *baseName = NULL;

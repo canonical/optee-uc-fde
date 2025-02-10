@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright 2023, Canonical Ltd.
+ * Copyright 2025, Canonical Ltd.
  */
 
 #include <stdio.h>
@@ -12,8 +12,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
-#include "tee_client_api.h"
-#include <unistd.h>
+#include <tee_client_api.h>
 
 #include <stdarg.h>
 
@@ -83,7 +82,7 @@ unsigned char *base64_decode(const char *in_buf, size_t in_buf_len, size_t *buf_
 TEEC_Result invode_command(uint32_t cmd_id, TEEC_Operation *operation) {
     TEEC_Context context;
     TEEC_Session session;
-    TEEC_Result ret;
+    TEEC_Result ret = TEEC_ERROR_GENERIC;
     TEEC_UUID svc_id = FDE_KEY_HANDLER_UUID_ID;
     uint32_t origin;
 
@@ -115,7 +114,7 @@ TEEC_Result encrypt_key(unsigned char *in_buf, size_t in_buf_len,
                         unsigned char *handle, size_t *handle_len,
                         unsigned char *out_buf, size_t *out_buf_len) {
     TEEC_Operation operation;
-    TEEC_Result ret;
+    TEEC_Result ret = TEEC_ERROR_GENERIC;
     memset(&operation, 0x0, sizeof(operation));
     operation.started = 1;
     operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
@@ -141,7 +140,7 @@ TEEC_Result decrypt_key(unsigned char *in_buf, size_t in_buf_len,
                         unsigned char *handle, size_t handle_len,
                         unsigned char *out_buf, size_t *out_buf_len) {
     TEEC_Operation operation;
-    TEEC_Result ret;
+    TEEC_Result ret = TEEC_ERROR_GENERIC;
     memset(&operation, 0x0, sizeof(operation));
     operation.started = 1;
     operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
@@ -164,7 +163,7 @@ TEEC_Result decrypt_key(unsigned char *in_buf, size_t in_buf_len,
 
 TEEC_Result get_ta_lock(uint32_t *value) {
     TEEC_Operation operation;
-    TEEC_Result ret;
+    TEEC_Result ret = TEEC_ERROR_GENERIC;
 
     memset(&operation, 0x0, sizeof(operation));
     operation.started = 1;
@@ -196,7 +195,7 @@ TEEC_Result lock_ta() {
 // generate random buffer
 unsigned char *generate_rng(size_t len) {
     TEEC_Operation operation;
-    TEEC_Result ret;
+    TEEC_Result ret = TEEC_ERROR_GENERIC;
     unsigned char * buf = NULL;
 
     buf  = malloc(len);

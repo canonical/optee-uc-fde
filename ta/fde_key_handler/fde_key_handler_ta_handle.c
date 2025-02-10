@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright 2023, Canonical Ltd.
+ * Copyright 2025, Canonical Ltd.
  */
 
 #include <assert.h>

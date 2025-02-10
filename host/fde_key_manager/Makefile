@@ -76,5 +76,5 @@ endef
 .PHONY: clean
 clean:
 	@echo '  CLEAN $(out-dir)'
-	$(q)rm -f $(out-dir)/fde_key_manager
+	$(q)rm -rf $(out-dir)/fde_key_manager
 	$(q)$(foreach obj,$(objs), rm -f $(obj))
