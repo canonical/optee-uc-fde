@@ -9,3 +9,4 @@ prime
 snap/.snapcraft/
 *.snap
 .project
+/scripts/op-tee-emulation
