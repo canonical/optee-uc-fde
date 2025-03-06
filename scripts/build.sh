@@ -33,7 +33,7 @@ function setup_toolchain() {
 
     test -d build || git clone https://github.com/OP-TEE/build.git --depth=1
     pushd ./build
-    make -f toolchain.mk -j2
+    make -f toolchain.mk -j"$(nproc)"
     popd
 
     export PATH="${root}/toolchains/aarch32/bin:${root}/toolchains/aarch64/bin:${PATH}"
@@ -53,14 +53,14 @@ function build_firmware() {
     pushd ./u-boot
     git clean -xdff
     make qemu_arm64_defconfig
-    make CROSS_COMPILE=aarch64-linux-gnu-
+    make CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)"
     popd
 
     # build optee_os. we will rebuild this once we've built the trusted
     # application, since we're using early TA.
     pushd ./optee_os
     git clean -xdff
-    make PLATFORM=vexpress-qemu_armv8a CFG_TEE_CORE_LOG_LEVEL=4 DEBUG=1 CFG_EARLY_CONSOLE=y -j$(nproc)
+    make PLATFORM=vexpress-qemu_armv8a CFG_TEE_CORE_LOG_LEVEL=4 DEBUG=1 CFG_EARLY_CONSOLE=y -j"$(nproc)"
     popd
 
     # build the trusted application. this is just the secure-world side. the
@@ -69,14 +69,14 @@ function build_firmware() {
     pushd ./optee_examples/hello_world/ta
     git clean -xdff
     make CROSS_COMPILE=aarch64-linux-gnu- PLATFORM=vexpress-qemu_armv8a \
-        TA_DEV_KIT_DIR="${root}/optee_os/out/arm-plat-vexpress/export-ta_arm64/"
+        TA_DEV_KIT_DIR="${root}/optee_os/out/arm-plat-vexpress/export-ta_arm64/" -j"$(nproc)"
     popd
 
     # build optee_os again, this time we're passing in the trusted application
     # as an early TA with EARLY_TA_PATHS.
     pushd ./optee_os
     make PLATFORM=vexpress-qemu_armv8a CFG_TEE_CORE_LOG_LEVEL=4 DEBUG=1 CFG_EARLY_CONSOLE=y CFG_EARLY_TA=y \
-        EARLY_TA_PATHS="${root}/optee_examples/hello_world/ta/8aaaf200-2450-11e4-abe2-0002a5d5c51b.elf" -j$(nproc)
+        EARLY_TA_PATHS="${root}/optee_examples/hello_world/ta/8aaaf200-2450-11e4-abe2-0002a5d5c51b.elf" -j"$(nproc)"
     popd
 
     # build the trusted firmware. the main output of this is the FIP image,
@@ -88,7 +88,7 @@ function build_firmware() {
         BL32_EXTRA1="${root}/optee_os/out/arm-plat-vexpress/core/tee-pager_v2.bin" \
         BL32_EXTRA2="${root}/optee_os/out/arm-plat-vexpress/core/tee-pageable_v2.bin" \
         BL33="${root}/u-boot/u-boot.bin" \
-        all fip -j$(nproc)
+        all fip -j"$(nproc)"
     popd
 
     cp "${root}/arm-trusted-firmware/build/qemu/debug/qemu_fw.bios" "${artifacts}/qemu_fw.bios"
@@ -118,7 +118,7 @@ function build_kernel_and_initrd() {
     # if things break, this might be a good place to start looking.
     cp "${root}/../configs/buildroot.config" .config
     ./utils/add-custom-hashes
-    make -j$(nproc)
+    make -j"$(nproc)"
 
     cp ./output/images/Image "${artifacts}/vmlinux"
     mkimage -A arm64 -T ramdisk -d ./output/images/rootfs.cpio "${artifacts}/initrd.img"
