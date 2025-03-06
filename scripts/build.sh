@@ -15,6 +15,9 @@
 # $PWD/op-tee-emulation/artifacts will be populated with the built kernel,
 # initrd, FIP, and disk image. Removing any of these files will cause them to be
 # rebuilt when re-running this script.
+#
+# Required packages: u-boot-tools qemu-utils qemu-system-arm git bison flex
+# python3-pyelftools
 
 set -ex
 
