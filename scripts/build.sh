@@ -19,7 +19,7 @@
 # Required packages: u-boot-tools qemu-utils qemu-system-arm git bison flex
 # python3-pyelftools
 
-set -ex
+set -exu
 
 root=$(pwd)/op-tee-emulation
 artifacts="${root}/artifacts"
@@ -63,12 +63,21 @@ function build_firmware() {
     # application, since we're using early TA.
     pushd ./optee_os
     git clean -xdff
+
+    # here we use PLATFORM=vexpress-qemu_armv8a. this platform is specific to
+    # the device we're targeting, and in this case we're targeting QEMU's virt
+    # platform, with the cortex-a57 CPU. setting this value results in op-tee
+    # being compiled/configured to work specifically with the emulated device.
     make PLATFORM=vexpress-qemu_armv8a CFG_TEE_CORE_LOG_LEVEL=4 DEBUG=1 CFG_EARLY_CONSOLE=y -j"$(nproc)"
     popd
 
     # build the trusted application. this is just the secure-world side. the
     # client side isn't used in this example, but it wouldn't be built into the
     # firmware anyways
+    #
+    # note that building the TA requires that optee_os has been built already
+    # (see TA_DEV_KIT_DIR). once we build the TA, we build optee_os again, which
+    # embeds the TA into the op-tee kernel.
     pushd ./optee_examples/hello_world/ta
     git clean -xdff
     make CROSS_COMPILE=aarch64-linux-gnu- PLATFORM=vexpress-qemu_armv8a \
@@ -104,6 +113,8 @@ function build_kernel_and_initrd() {
 
     rm -f "${artifacts}/vmlinux" "${artifacts}/initrd.img"
 
+    # TODO: convert this to use an Ubuntu rootfs and kernel
+
     # buildroot.config tells buildroot that we want to use an optee_client from
     # a tarball. this lets us use the tip of all the op-tee repos.
     test -d optee_client || git clone https://github.com/OP-TEE/optee_client.git --depth=1
@@ -117,13 +128,22 @@ function build_kernel_and_initrd() {
     # this config contains some information specific to the toolchain that we
     # configured things to use earlier. specifically,
     # BR2_TOOLCHAIN_EXTERNAL_GCC_11 and BR2_TOOLCHAIN_EXTERNAL_HEADERS_4_20.
+    # things might break if the downloaded toolchain no longer matches this
+    # config.
     #
-    # if things break, this might be a good place to start looking.
+    # buildroot.config is "make qemu_aarch64_virt_defconfig" with a few changes:
+    #   - uses an externally provided toolchain, downloaded by setup_toolchain
+    #   - installs tee-supplicant, which runs on boot
+    #   - enables CONFIG_TEE and CONFIG_OPTEE in the kernel. these are set in
+    #     ${root}/../configs/kernel-fragment.config
     cp "${root}/../configs/buildroot.config" .config
     ./utils/add-custom-hashes
     make -j"$(nproc)"
 
     cp ./output/images/Image "${artifacts}/vmlinux"
+
+    # TODO: use a FIT image here, rather than separate initrd and kernel, that
+    # is more in line with how we'd do this in production
     mkimage -A arm64 -T ramdisk -d ./output/images/rootfs.cpio "${artifacts}/initrd.img"
 
     popd
