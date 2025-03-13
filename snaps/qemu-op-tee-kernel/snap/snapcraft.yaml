@@ -1,0 +1,100 @@
+name: qemu-op-tee-kernel
+summary: Kernel for QEMU & OP-TEE integration testing
+description: Kernel for QEMU & OP-TEE integration testing
+version: v0.0.1
+type: kernel
+confinement: strict
+grade: stable
+build-base: core24
+
+platforms:
+  arm64:
+    build-on: [amd64]
+    build-for: [arm64]
+
+build-packages:
+  - binutils-aarch64-linux-gnu
+  - gcc-aarch64-linux-gnu
+
+parts:
+  kernel:
+    plugin: nil
+    source: https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble
+    source-branch: master-next
+    source-type: git
+    source-depth: 1
+    build-packages:
+      - bc
+      - bison
+      - flex
+      - libssl-dev
+    override-build: |
+      ./debian/scripts/misc/annotations --arch arm64 --flavour generic --export > .config
+
+      # TODO: better way to do this?
+      make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+      scripts/config --disable SYSTEM_TRUSTED_KEYS
+      scripts/config --disable SYSTEM_REVOCATION_KEYS
+      scripts/config --disable ARM_FFA_TRANSPORT
+      make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+
+      make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
+
+      make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image
+      cp -a arch/arm64/boot/Image "${CRAFT_PART_INSTALL}/kernel.img"
+
+      mkdir ./modules
+      make INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="./modules" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_install
+
+      cp -a ./modules/lib/modules "${CRAFT_PART_INSTALL}/"
+    prime:
+      - kernel.img
+      - modules
+  initrd:
+    after: [kernel]
+    plugin: nil
+    build-packages:
+      - cpio
+      - kmod
+      - qemu-user-static
+      - u-boot-tools
+      - debootstrap
+      - zstd
+    override-build: |
+      # building the initrd for an arm64 system requires that we use a arm64
+      # chroot with ubuntu-core-initramfs installed in it
+      debootstrap --variant minbase --arch arm64 noble ./fs http://ports.ubuntu.com/ubuntu-ports
+      cat <<EOF > ./fs/etc/apt/sources.list
+      deb http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+      deb http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+      deb http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
+      EOF
+      chroot ./fs apt-get update
+      chroot ./fs apt-get install -y software-properties-common
+      chroot ./fs add-apt-repository ppa:snappy-dev/image -y
+      chroot ./fs apt-get update
+      chroot ./fs apt-get install -y ubuntu-core-initramfs linux-firmware
+
+      kernel_version=$(basename "${CRAFT_STAGE}/modules/"*)
+
+      # copy the modules to the chroot so that emulated ubuntu-core-initramfs
+      # can access them
+      cp -a "${CRAFT_STAGE}/modules" ./fs/tmp/
+
+      # this is how we configure ubuntu-core-initramfs to copy the tee and optee
+      # kernel modules into the initrd
+      mkdir -p ./fs/usr/lib/ubuntu-core-initramfs/modules/optee
+      echo tee > ./fs/usr/lib/ubuntu-core-initramfs/modules/optee/extra-modules.conf
+      echo optee >> ./fs/usr/lib/ubuntu-core-initramfs/modules/optee/extra-modules.conf
+
+      chroot ./fs ubuntu-core-initramfs create-initrd --feature main optee --kernelver="${kernel_version}" --kerneldir "/tmp/modules/${kernel_version}" --firmwaredir '/lib/firmware' --output initrd.img
+
+      unzstd < "./fs/initrd.img-${kernel_version}" > initrd.cpio
+      mkimage -A arm64 -T ramdisk -d ./initrd.cpio "${CRAFT_PART_INSTALL}/initrd.img"
+
+      # steal the firmware from the arm64 system, it should be usable with the
+      # kernel we've just built
+      cp -a ./fs/lib/firmware "${CRAFT_PART_INSTALL}/"
+    prime:
+      - initrd.img
+      - firmware

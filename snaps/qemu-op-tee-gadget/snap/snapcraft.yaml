@@ -1,0 +1,156 @@
+name: qemu-op-tee-gadget
+summary: Gadget for QEMU & OP-TEE integration testing
+description: Gadget for QEMU & OP-TEE integration testing
+version: v0.0.1
+type: gadget
+base: core24
+confinement: strict
+grade: stable
+
+platforms:
+  arm64:
+    build-on: [amd64]
+    build-for: [arm64]
+
+build-packages:
+  - bison
+  - build-essential
+  - device-tree-compiler
+  - flex
+  - gcc-aarch64-linux-gnu
+  - gcc-arm-linux-gnueabihf
+  - libc6-dev-arm64-cross
+  - libgnutls28-dev
+  - libssl-dev
+  - pkgconf
+  - python3
+  - python3-cryptography
+  - python3-pycryptodome
+  - python3-pyelftools
+  - u-boot-tools
+  - uuid-dev:arm64
+
+package-repositories:
+  - type: apt
+    architectures: [arm64]
+    formats: [deb, deb-src]
+    components: [main]
+    suites: [noble, noble-updates, noble-backports]
+    key-id: F6ECB3762474EDA9D21B7022871920D1991BC93C
+    url: http://ports.ubuntu.com/ubuntu-ports
+
+parts:
+  optee-client:
+    plugin: make
+    source: https://github.com/OP-TEE/optee_client.git
+    source-type: git
+    source-tag: 4.5.0
+    source-depth: 1
+    build-environment:
+      - PKG_CONFIG_PATH: "/usr/lib/aarch64-linux-gnu/pkgconfig"
+    make-parameters:
+      - ARCH="arm64"
+      - DEBUG="1"
+      - CROSS_COMPILE="aarch64-linux-gnu-"
+      - CFG_TEE_CLIENT_LOAD_PATH="/"
+      - CFG_TA_TEST_PATH="n"
+      - PKG_CONFIG="pkg-config"
+    stage:
+      - usr/sbin
+      - usr/lib/*/lib*so*
+
+  optee-fde:
+    plugin: dump
+    source: https://git.launchpad.net/~ondrak/+git/optee-uc-fde
+    source-type: git
+    source-branch: master
+    organize:
+      '*': optee-fde/
+    prime:
+      - -*
+
+  u-boot:
+    plugin: nil
+    source: https://github.com/u-boot/u-boot.git
+    source-type: git
+    source-tag: v2025.04-rc3
+    source-depth: 1
+    build-environment:
+      - CROSS_COMPILE: "aarch64-linux-gnu-"
+    override-build: |
+      make qemu_arm64_defconfig
+      make -j"$(nproc)"
+      cp u-boot.bin "${CRAFT_PART_INSTALL}/u-boot.bin"
+    stage:
+      - u-boot.bin
+    prime:
+      - -*
+
+  optee-os:
+    after: [u-boot, optee-fde]
+    plugin: nil
+    source: https://github.com/OP-TEE/optee_os.git
+    source-type: git
+    source-tag: 4.5.0
+    source-depth: 1
+    build-environment:
+      - DEBUG: "1"
+      - PLATFORM: "vexpress-qemu_armv8a"
+      - CFG_TEE_CORE_LOG_LEVEL: "4"
+      - CFG_EARLY_CONSOLE: "y"
+    override-build: |
+      cp -r ${CRAFT_STAGE}/optee-fde/ta/fde_key_handler ./ta/
+
+      # compile optee_os the first time
+      make -j"$(nproc)"
+
+      # compile optee_os again, this time embedding the FDE TA via
+      # EARLY_TA_PATHS
+      make CFG_EARLY_TA=y EARLY_TA_PATHS="out/arm-plat-vexpress/ta/pkcs11/fd02c9da-306c-48c7-a49c-bbd827ae86ee.stripped.elf \
+        out/arm-plat-vexpress/ta/trusted_keys/f04a0fe7-1f5d-4b9b-abf7-619b85b4ce8c.stripped.elf \
+        out/arm-plat-vexpress/ta/fde_key_handler/fd1b2a86-3668-11eb-adc1-0242ac120002.stripped.elf" \
+        -j"$(nproc)"
+
+      cp ./out/arm-plat-vexpress/core/tee-header_v2.bin \
+        ./out/arm-plat-vexpress/core/tee-pager_v2.bin \
+        ./out/arm-plat-vexpress/core/tee-pageable_v2.bin \
+        "${CRAFT_PART_INSTALL}/"
+    stage:
+      - tee-header_v2.bin
+      - tee-pager_v2.bin
+      - tee-pageable_v2.bin
+    prime:
+      - -*
+
+  arm-trusted-firmware:
+    after: [optee-os]
+    plugin: nil
+    source: https://github.com/ARM-software/arm-trusted-firmware.git
+    source-type: git
+    source-depth: 1
+    build-environment:
+      - CROSS_COMPILE: "aarch64-linux-gnu-"
+      - PLAT: "qemu"
+      - DEBUG: "1"
+      - SPD: "opteed"
+      - BL32: "${CRAFT_STAGE}/tee-header_v2.bin"
+      - BL32_EXTRA1: "${CRAFT_STAGE}/tee-pager_v2.bin"
+      - BL32_EXTRA2: "${CRAFT_STAGE}/tee-pageable_v2.bin"
+      - BL33: "${CRAFT_STAGE}/u-boot.bin"
+    override-build: |
+      make -e -j"$(nproc)"
+      cp ./build/qemu/debug/qemu_fw.bios "${CRAFT_PART_INSTALL}/"
+    prime:
+      - qemu_fw.bios
+
+  gadget:
+    plugin: nil
+    source: .
+    override-build: |
+      mkimage -A arm64 -T script -d boot.cmd "${CRAFT_PART_INSTALL}/boot.scr"
+      cp ./boot.sel "${CRAFT_PART_INSTALL}/boot.sel"
+      touch "${CRAFT_PART_INSTALL}/uboot.conf"
+    prime:
+      - boot.scr
+      - boot.sel
+      - uboot.conf
