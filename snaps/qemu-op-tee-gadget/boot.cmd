@@ -5,11 +5,10 @@
 #  distro_bootpart      The partition containing the boot files
 #                       (introduced in u-boot mainline 2016.01)
 #  prefix               Prefix within the boot partiion to the boot files
-#  kernel_addr_r        Address to load the kernel to
 #  ramdisk_addr_r       Address to load the initrd to.
 
-# these should probably be set somewhere else?
 setenv kernel_addr_r 0x80400000
+setenv ramdisk_addr_r 0x84000000
 setenv fdt_addr_r 0x40000000
 
 setenv kernel_filename kernel.img
