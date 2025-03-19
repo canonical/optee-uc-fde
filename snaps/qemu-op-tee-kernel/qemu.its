@@ -1,0 +1,64 @@
+/dts-v1/;
+
+/ {
+	description = "Ubuntu Core kernel, ramdisk and FDT blobs for QEMU";
+	#address-cells = <1>;
+
+	images {
+		kernel {
+			description = "kernel";
+			data = /incbin/("./Image");
+			type = "kernel";
+			arch = "arm64";
+			os = "linux";
+			compression = "none";
+			load =  <0x80400000>;
+			entry = <0x80400000>;
+			hash-1 {
+				algo = "sha256";
+			};
+		};
+
+		initrd {
+			description = "initrd";
+			data = /incbin/("./initrd.img");
+			type = "ramdisk";
+			arch = "arm64";
+			os = "linux";
+			compression = "zstd";
+			load =  <0x84000000>;
+			entry = <0x84000000>;
+			hash-1 {
+				algo = "sha256";
+			};
+		};
+
+		fdt {
+			description = "device tree";
+			data = /incbin/("./qemu.dtb");
+			type = "flat_dt";
+			arch = "arm64";
+			compression = "none";
+			load =  <0x80000000>;
+			entry = <0x80000000>;
+			hash-1 {
+				algo = "sha256";
+			};
+		};
+	};
+
+	configurations {
+        default = "conf";
+		conf {
+			description = "QEMU";
+			kernel = "kernel";
+			ramdisk = "initrd";
+			fdt = "fdt";
+			signature-1 {
+				algo = "sha256,rsa2048";
+				key-name-hint = "dev-key";
+				sign-images = "fdt", "kernel", "ramdisk";
+			};
+		};
+	};
+};

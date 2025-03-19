@@ -5,11 +5,10 @@
 #  distro_bootpart      The partition containing the boot files
 #                       (introduced in u-boot mainline 2016.01)
 #  prefix               Prefix within the boot partiion to the boot files
-#  ramdisk_addr_r       Address to load the initrd to.
 
-setenv kernel_addr_r 0x80400000
-setenv ramdisk_addr_r 0x84000000
-setenv fdt_addr_r 0x40000000
+fdt addr ${fdtcontroladdr}
+
+setenv fit_addr_r 0x50000000
 
 setenv kernel_filename kernel.img
 setenv core_state "/uboot/ubuntu/boot.sel"
@@ -53,15 +52,6 @@ for pathprefix in ${fk_image_locations}; do
     setenv kernel_prefix "${pathprefix}systems/${snapd_recovery_system}/kernel/"
   fi
 
-  load ${devtype} ${devnum}:${kernel_bootpart} ${ramdisk_addr_r} ${kernel_prefix}${kernel_filename}
-  kernel_size=${filesize}
-
-  echo "Copying kernel..."
-  cp.b ${ramdisk_addr_r} ${kernel_addr_r} ${kernel_size}
-
-  load ${devtype} ${devnum}:${kernel_bootpart} ${ramdisk_addr_r} ${kernel_prefix}initrd.img
-  setenv ramdisk_param "${ramdisk_addr_r}:${filesize}"
-
-  echo "Booting Ubuntu from ${devtype} ${devnum}:${partition}..."
-  booti ${kernel_addr_r} ${ramdisk_param} ${fdt_addr_r}
+  load ${devtype} ${devnum}:${kernel_bootpart} ${fit_addr_r} ${kernel_prefix}${kernel_filename}
+  bootm ${fit_addr_r}
 done

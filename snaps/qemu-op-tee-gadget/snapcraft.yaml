@@ -69,16 +69,53 @@ parts:
     prime:
       - -*
 
+  pub-signing-key:
+    plugin: dump
+    source: https://git.launchpad.net/~ondrak/+git/dev-keys
+    source-type: git
+    source-branch: master
+    stage:
+      - u-boot-pubkey.dtsi
+    prime:
+      - -*
+
   u-boot:
+    after: [pub-signing-key]
     plugin: nil
     source: https://github.com/u-boot/u-boot.git
     source-type: git
     source-tag: v2025.04-rc3
     source-depth: 1
+    build-packages:
+      - ipxe-qemu
+      - qemu-system-arm
+      - device-tree-compiler
     build-environment:
       - CROSS_COMPILE: "aarch64-linux-gnu-"
     override-build: |
+      cp ${CRAFT_STAGE}/u-boot-pubkey.dtsi .
+      cat <<EOF > signature-node.dts
+      /dts-v1/;
+      / {
+        signature {
+          fit-key {
+            required ="conf";
+            algo ="sha256,rsa2048";
+            key-name-hint ="dev-key";
+            /include/ "u-boot-pubkey.dtsi"
+          };
+        };
+      };
+      EOF
+
+      qemu-system-aarch64 -machine virt,secure=on -cpu cortex-a57 -smp 4 -m 4096 -machine dumpdtb=./qemu.dtb
+      cat <(dtc -O dts signature-node.dts) <(dtc -O dts qemu.dtb | grep -v /dts-v1/) > ./arch/arm/dts/qemu-arm64.dts
+
       make qemu_arm64_defconfig
+      ./scripts/config --set-val OF_OMIT_DTB n
+      ./scripts/config --set-val OF_EMBED y
+      ./scripts/config --set-val OF_SEPARATE n
+
       make -j"$(nproc)"
       cp u-boot.bin "${CRAFT_PART_INSTALL}/u-boot.bin"
 
