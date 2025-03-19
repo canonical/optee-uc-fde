@@ -41,15 +41,16 @@ parts:
       make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
 
       make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image
-      cp -a arch/arm64/boot/Image "${CRAFT_PART_INSTALL}/kernel.img"
+      cp -a arch/arm64/boot/Image "${CRAFT_PART_INSTALL}/"
 
       mkdir ./modules
       make INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="./modules" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_install
 
       cp -a ./modules/lib/modules "${CRAFT_PART_INSTALL}/"
     prime:
-      - kernel.img
+      - -Image
       - modules
+
   initrd:
     after: [kernel]
     plugin: nil
@@ -89,8 +90,7 @@ parts:
 
       chroot ./fs ubuntu-core-initramfs create-initrd --feature main optee --kernelver="${kernel_version}" --kerneldir "/tmp/modules/${kernel_version}" --firmwaredir '/lib/firmware' --output initrd.img
 
-      unzstd < "./fs/initrd.img-${kernel_version}" > initrd.cpio
-      mkimage -A arm64 -T ramdisk -d ./initrd.cpio "${CRAFT_PART_INSTALL}/initrd.img"
+      cp -a "./fs/initrd.img-${kernel_version}" "${CRAFT_PART_INSTALL}/initrd.img"
 
       # steal the firmware from the arm64 system, it should be usable with the
       # kernel we've just built
@@ -98,3 +98,30 @@ parts:
     prime:
       - initrd.img
       - firmware
+
+  signing-keys:
+    plugin: dump
+    source: https://git.launchpad.net/~ondrak/+git/dev-keys
+    source-type: git
+    source-branch: master
+    organize:
+      '*': signing-keys/
+    prime:
+      - -*
+
+  fit:
+    after: [initrd, kernel, signing-keys]
+    plugin: nil
+    source: .
+    build-packages:
+      - u-boot-tools
+      - device-tree-compiler
+      - ipxe-qemu
+      - qemu-system-arm
+    override-build: |
+      qemu-system-aarch64 -machine virt,secure=on -cpu cortex-a57 -smp 4 -m 4096 -machine dumpdtb=./qemu.dtb
+      cat optee.dts <(dtc -O dts qemu.dtb | grep -v /dts-v1/) | dtc -O dtb > qemu-with-optee.dtb
+
+      mkimage -r --fit "${CRAFT_STAGE}/qemu.its" -k ${CRAFT_STAGE}/signing-keys -K "qemu-with-optee.dtb" ${CRAFT_PART_INSTALL}/kernel.img
+    prime:
+      - kernel.img
