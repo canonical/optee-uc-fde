@@ -264,9 +264,7 @@ parts:
       - ipxe-qemu
       - qemu-system-arm
     override-build: |
-      qemu-system-aarch64 -machine virt,secure=on -cpu cortex-a57 -smp 4 -m 4096 -machine dumpdtb=./qemu.dtb
-      cat optee.dts <(dtc -O dts qemu.dtb | grep -v /dts-v1/) | dtc -O dtb > qemu-with-optee.dtb
-
-      mkimage -r --fit "${CRAFT_STAGE}/qemu.its" -k ${CRAFT_STAGE}/signing-keys -K "qemu-with-optee.dtb" ${CRAFT_PART_INSTALL}/kernel.img
+      cp ./qemu.its "${CRAFT_STAGE}/qemu.its"
+      mkimage --fit "${CRAFT_STAGE}/qemu.its" -k "${CRAFT_STAGE}/signing-keys" "${CRAFT_PART_INSTALL}/kernel.img"
     prime:
       - kernel.img

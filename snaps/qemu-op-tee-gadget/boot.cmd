@@ -8,6 +8,7 @@
 
 fdt addr ${fdtcontroladdr}
 
+setenv qemu_fdt_addr 0x40000000
 setenv fit_addr_r 0x50000000
 
 setenv kernel_filename kernel.img
@@ -53,5 +54,8 @@ for pathprefix in ${fk_image_locations}; do
   fi
 
   load ${devtype} ${devnum}:${kernel_bootpart} ${fit_addr_r} ${kernel_prefix}${kernel_filename}
-  bootm ${fit_addr_r}
+
+  # we use the kernel and initrd from the FIT on disk, and the device tree
+  # provided by the firmware/qemu
+  bootm ${fit_addr_r} ${fit_addr_r} ${qemu_fdt_addr}
 done

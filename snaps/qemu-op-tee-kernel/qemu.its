@@ -32,19 +32,6 @@
 				algo = "sha256";
 			};
 		};
-
-		fdt {
-			description = "device tree";
-			data = /incbin/("./qemu.dtb");
-			type = "flat_dt";
-			arch = "arm64";
-			compression = "none";
-			load =  <0x80000000>;
-			entry = <0x80000000>;
-			hash-1 {
-				algo = "sha256";
-			};
-		};
 	};
 
 	configurations {
@@ -53,11 +40,10 @@
 			description = "QEMU";
 			kernel = "kernel";
 			ramdisk = "initrd";
-			fdt = "fdt";
 			signature-1 {
 				algo = "sha256,rsa2048";
 				key-name-hint = "dev-key";
-				sign-images = "fdt", "kernel", "ramdisk";
+				sign-images = "kernel", "ramdisk";
 			};
 		};
 	};
