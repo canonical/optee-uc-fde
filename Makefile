@@ -63,8 +63,8 @@ ta:
 
 .PHONY: clean
 clean:
-	$(q)$(MAKE) -C host/fde_key_manager O=$(out-dir) $@
-	$(q)$(MAKE) -C ta O=$(out-dir) $@
+	${q}if [ -d $(out-dir)/fde_key_manager ]; then $(MAKE) -C host/fde_key_manager O=$(out-dir) $@; fi
+	${q}if [ -d $(out-dir)/ta ]; then $(MAKE) -C ta O=$(out-dir) $@; fi
 
 install:
 	$(echo) '  INSTALL ${DESTDIR}/lib/optee_armtz'
