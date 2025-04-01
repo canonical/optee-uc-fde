@@ -141,6 +141,7 @@ parts:
       - DEBUG: "1"
       - PLATFORM: "vexpress-qemu_armv8a"
       - CFG_TEE_CORE_LOG_LEVEL: "4"
+      - CFG_CORE_ASLR: "n"
       - CFG_EARLY_CONSOLE: "y"
     override-build: |
       cp -r ${CRAFT_STAGE}/optee-fde/ta/fde_key_handler ./ta/
@@ -158,13 +159,13 @@ parts:
       cp ./out/arm-plat-vexpress/core/tee-header_v2.bin \
         ./out/arm-plat-vexpress/core/tee-pager_v2.bin \
         ./out/arm-plat-vexpress/core/tee-pageable_v2.bin \
+        ./out/arm-plat-vexpress/core/tee.elf \
         "${CRAFT_PART_INSTALL}/"
     stage:
       - tee-header_v2.bin
       - tee-pager_v2.bin
       - tee-pageable_v2.bin
-    prime:
-      - -*
+      - tee.elf
 
   arm-trusted-firmware:
     after: [optee-os]

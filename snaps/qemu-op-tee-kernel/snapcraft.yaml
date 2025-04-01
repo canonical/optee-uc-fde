@@ -28,12 +28,6 @@ build-packages:
   - gcc-arm-linux-gnueabihf
   - pkgconf
 
-hooks:
-  fde-setup:
-    plugs:
-      - tee
-      - home
-
 parts:
   kernel:
     plugin: nil
@@ -69,48 +63,6 @@ parts:
       - -Image
       - modules
 
-  optee-uc-fde:
-    plugin: dump
-    source: https://git.launchpad.net/~ondrak/+git/optee-uc-fde
-    source-type: git
-    source-branch: with-helper
-    organize:
-      '*': optee-uc-fde/
-    prime:
-      - -*
-
-  optee-os:
-    after: [optee-uc-fde]
-    plugin: nil
-    source: https://github.com/OP-TEE/optee_os.git
-    source-type: git
-    source-tag: 4.5.0
-    source-depth: 1
-    build-packages:
-      - device-tree-compiler
-      - python3-pyelftools
-    build-environment:
-      - DEBUG: "1"
-      - PLATFORM: "vexpress-qemu_armv8a"
-      - CFG_TEE_CORE_LOG_LEVEL: "4"
-      - CFG_EARLY_CONSOLE: "y"
-    override-build: |
-      cp -r ${CRAFT_STAGE}/optee-uc-fde/ta/fde_key_handler ./ta/
-
-      # compile optee_os the first time
-      make -j"$(nproc)"
-
-      # compile optee_os again, this time embedding the FDE TA via
-      # EARLY_TA_PATHS
-      make CFG_EARLY_TA=y EARLY_TA_PATHS="out/arm-plat-vexpress/ta/pkcs11/fd02c9da-306c-48c7-a49c-bbd827ae86ee.stripped.elf \
-        out/arm-plat-vexpress/ta/trusted_keys/f04a0fe7-1f5d-4b9b-abf7-619b85b4ce8c.stripped.elf \
-        out/arm-plat-vexpress/ta/fde_key_handler/fd1b2a86-3668-11eb-adc1-0242ac120002.stripped.elf" \
-        -j"$(nproc)"
-
-      cp -a ./out/arm-plat-vexpress/export-ta_arm64 "${CRAFT_PART_INSTALL}/"
-    prime:
-      - -*
-
   optee-client:
     plugin: nil
     source: https://github.com/OP-TEE/optee_client.git
@@ -134,31 +86,6 @@ parts:
       make install O=${CRAFT_PART_BUILD}/out
     prime:
       - usr/lib/*/lib*so*
-
-  optee-uc-fde-client:
-    after:
-      - optee-client
-      - optee-os
-      - optee-uc-fde
-    plugin: nil
-    source-type: local
-    build-packages:
-      - libjson-c-dev:arm64
-      - libcryptsetup-dev:arm64
-    build-environment:
-      - ARCH: "arm64"
-      - CROSS_COMPILE: "aarch64-linux-gnu-"
-      - TA_DEV_KIT_DIR: "${CRAFT_STAGE}/export-ta_arm64"
-      - OPTEE_CLIENT_EXPORT: "${CRAFT_STAGE}/usr"
-      - DESTDIR: "${CRAFT_PART_INSTALL}"
-      - LDFLAGS: "-L${CRAFT_STAGE}/usr/lib/aarch64-linux-gnu"
-    override-build: |
-      make -C ${CRAFT_STAGE}/optee-uc-fde O=${CRAFT_PART_BUILD}/out fde-key-manager fde-reveal-key fde-setup fde-helper
-      make -C ${CRAFT_STAGE}/optee-uc-fde O=${CRAFT_PART_BUILD}/out fde-key-manager fde-reveal-key fde-setup fde-helper install
-      install -D -m 755 ${CRAFT_PART_INSTALL}/usr/bin/fde-setup ${CRAFT_PART_INSTALL}/meta/hooks/fde-setup
-      ln -sf fde-reveal-key ${CRAFT_PART_INSTALL}/usr/bin/fde-setup
-    prime:
-      - meta/
 
   chroot:
     plugin: nil
@@ -193,8 +120,16 @@ parts:
     prime:
       - -*
 
+  snap-bootstrap:
+    plugin: nil
+    source: .
+    override-build: |
+      cp -a ./snap-bootstrap "${CRAFT_PART_INSTALL}/snap-bootstrap"
+    prime:
+      - -*
+
   initrd:
-    after: [kernel, optee-uc-fde-client, chroot]
+    after: [kernel, optee-client, chroot, snap-bootstrap]
     plugin: nil
     build-packages:
       - cpio
@@ -229,9 +164,11 @@ parts:
       # tell ubuntu-core-initramfs to add files to the initrd by putting them
       # into a directory under /usr/lib/ubuntu-core-initramfs/optee
       mkdir -p ./fs/usr/lib/ubuntu-core-initramfs/optee
-      for path in "${CRAFT_STAGE}/usr/bin/fde-reveal-key" "${CRAFT_STAGE}/usr/bin/fde-setup" "${CRAFT_STAGE}/usr/lib/aarch64-linux-gnu/libteec.so"*; do
+      for path in "${CRAFT_STAGE}/usr/lib/aarch64-linux-gnu/libteec.so"*; do
         install -D "${path}" "./fs/usr/lib/ubuntu-core-initramfs/optee/${path#${CRAFT_STAGE}}"
       done
+
+      cp -a "${CRAFT_STAGE}/snap-bootstrap" ./fs/usr/lib/ubuntu-core-initramfs/main/usr/lib/snapd/snap-bootstrap
 
       kernel_version=$(basename "${CRAFT_STAGE}/modules/"*)
       chroot ./fs ubuntu-core-initramfs create-initrd --feature main optee --kernelver="${kernel_version}" --kerneldir "/tmp/modules/${kernel_version}" --firmwaredir '/lib/firmware' --output initrd.img
