@@ -244,6 +244,7 @@ parts:
       - initrd.img
       - firmware
 
+  # TODO: change this once PR #1 is merged
   signing-keys:
     plugin: dump
     source: https://git.launchpad.net/~ondrak/+git/dev-keys
