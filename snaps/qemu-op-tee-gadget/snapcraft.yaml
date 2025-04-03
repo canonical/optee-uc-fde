@@ -112,6 +112,9 @@ parts:
       cat <(dtc -O dts signature-node.dts) <(dtc -O dts qemu.dtb | grep -v /dts-v1/) > ./arch/arm/dts/qemu-arm64.dts
 
       make qemu_arm64_defconfig
+
+      # these flags make it so that u-boot will use the DTB embedded in it,
+      # rather than the one provided by the firmware
       ./scripts/config --set-val OF_OMIT_DTB n
       ./scripts/config --set-val OF_EMBED y
       ./scripts/config --set-val OF_SEPARATE n
