@@ -16,7 +16,7 @@ package-repositories:
   - type: apt
     architectures: [arm64]
     formats: [deb, deb-src]
-    components: [main]
+    components: [main, universe]
     suites: [noble, noble-updates, noble-backports]
     key-id: F6ECB3762474EDA9D21B7022871920D1991BC93C
     url: http://ports.ubuntu.com/ubuntu-ports
@@ -65,27 +65,15 @@ parts:
 
   optee-client:
     plugin: nil
-    source: https://github.com/OP-TEE/optee_client.git
-    source-type: git
-    source-tag: 4.5.0
-    build-packages:
-      - uuid-dev:arm64
-      - python3-cryptography
-    build-environment:
-      - ARCH: "arm64"
-      - CROSS_COMPILE: "aarch64-linux-gnu-"
-      - CFG_TEE_CLIENT_LOAD_PATH: ""
-      - CFG_TA_TEST_PATH: "0"
-      - SBINDIR: "/usr/sbin"
-      - LIBDIR: "/usr/lib/aarch64-linux-gnu"
-      - DESTDIR: "${CRAFT_PART_INSTALL}"
-      - PKG_CONFIG: "pkg-config"
-      - PKG_CONFIG_PATH: "/usr/lib/aarch64-linux-gnu/pkgconfig"
-    override-build: |
-      make O=${CRAFT_PART_BUILD}/out -j$(nproc)
-      make install O=${CRAFT_PART_BUILD}/out
-    prime:
-      - usr/lib/*/lib*so*
+    stage-packages:
+      - optee-client-dev:arm64
+    stage:
+      - -usr/include/*
+      - -usr/share/doc/optee-client-dev/README.Debian
+      - -usr/share/doc/optee-client-dev/README.md
+      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libckteec.so*
+      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libseteec.so*
+      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libteeacl.so*
 
   chroot:
     plugin: nil
