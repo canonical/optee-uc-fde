@@ -40,25 +40,6 @@ package-repositories:
     url: http://ports.ubuntu.com/ubuntu-ports
 
 parts:
-  optee-client:
-    plugin: make
-    source: https://github.com/OP-TEE/optee_client.git
-    source-type: git
-    source-tag: 4.5.0
-    source-depth: 1
-    build-environment:
-      - PKG_CONFIG_PATH: "/usr/lib/aarch64-linux-gnu/pkgconfig"
-    make-parameters:
-      - ARCH="arm64"
-      - DEBUG="1"
-      - CROSS_COMPILE="aarch64-linux-gnu-"
-      - CFG_TEE_CLIENT_LOAD_PATH="/"
-      - CFG_TA_TEST_PATH="n"
-      - PKG_CONFIG="pkg-config"
-    stage:
-      - usr/sbin
-      - usr/lib/*/lib*so*
-
   optee-fde:
     plugin: dump
     source: https://git.launchpad.net/~ondrak/+git/optee-uc-fde
