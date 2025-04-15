@@ -1,4 +1,4 @@
-name: qemu-op-tee-kernel
+name: test-qemu-optee-kernel
 summary: Kernel for QEMU & OP-TEE integration testing
 description: Kernel for QEMU & OP-TEE integration testing
 version: v0.0.1

@@ -1,4 +1,4 @@
-name: qemu-op-tee-gadget
+name: test-qemu-optee-gadget
 summary: Gadget for QEMU & OP-TEE integration testing
 description: Gadget for QEMU & OP-TEE integration testing
 version: v0.0.1
