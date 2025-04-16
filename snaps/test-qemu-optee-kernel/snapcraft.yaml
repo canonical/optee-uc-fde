@@ -195,3 +195,4 @@ parts:
       mkimage --fit "${CRAFT_STAGE}/qemu.its" -k "${CRAFT_STAGE}/signing-keys" "${CRAFT_PART_INSTALL}/kernel.img"
     prime:
       - kernel.img
+      - qemu.its
