@@ -1,5 +1,5 @@
 volumes:
-  qemu:
+  pc:
     schema: mbr
     bootloader: u-boot
     structure:
