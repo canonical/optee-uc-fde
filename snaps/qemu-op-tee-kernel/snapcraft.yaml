@@ -173,6 +173,11 @@ parts:
       mkdir fs
       tar -xvf ./noble-base-arm64.tar.gz -C ./fs
 
+      finish() {
+        umount -R ./fs/{proc,run,sys,dev} || true
+      }
+      trap finish EXIT
+
       cp --no-dereference /etc/resolv.conf ./fs/etc/resolv.conf
       for m in proc run sys dev dev/pts dev/null dev/zero dev/full dev/random dev/urandom dev/tty; do
         mount --bind "/${m}" "./fs/${m}"
@@ -183,10 +188,6 @@ parts:
       chroot ./fs add-apt-repository ppa:snappy-dev/image -y
       chroot ./fs apt-get update
       chroot ./fs apt-get install -y ubuntu-core-initramfs
-
-      for m in proc run sys dev; do
-        umount -R "./fs/${m}"
-      done
 
       tar --zstd -cvf ${CRAFT_PART_INSTALL}/chroot.tar.zst -C ./fs .
     prime:
@@ -204,6 +205,11 @@ parts:
     override-build: |
       mkdir fs
       tar -xvf ${CRAFT_STAGE}/chroot.tar.zst -C ./fs
+
+      finish() {
+        umount -R ./fs/{proc,run,sys,dev} || true
+      }
+      trap finish EXIT
 
       for m in proc run sys dev dev/pts dev/null dev/zero dev/full dev/random dev/urandom dev/tty; do
         mount --bind "/${m}" "./fs/${m}"
@@ -229,11 +235,6 @@ parts:
 
       kernel_version=$(basename "${CRAFT_STAGE}/modules/"*)
       chroot ./fs ubuntu-core-initramfs create-initrd --feature main optee --kernelver="${kernel_version}" --kerneldir "/tmp/modules/${kernel_version}" --firmwaredir '/lib/firmware' --output initrd.img
-
-      # we're done with the chroot now
-      for m in proc run sys dev; do
-        umount -R "./fs/${m}"
-      done
 
       cp -a "./fs/initrd.img-${kernel_version}" "${CRAFT_PART_INSTALL}/initrd.img"
 
