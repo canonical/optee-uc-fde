@@ -108,6 +108,8 @@ parts:
     prime:
       - -*
 
+  # TODO: once everything is merged and released, we can just use the
+  # snap-bootstrap that ubuntu-core-initramfs pulls in
   snap-bootstrap:
     plugin: nil
     source: .
