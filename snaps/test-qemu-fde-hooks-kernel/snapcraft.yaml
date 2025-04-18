@@ -1,0 +1,272 @@
+name: test-qemu-fde-hooks-kernel
+summary: Kernel for QEMU & OP-TEE integration testing
+description: Kernel for QEMU & OP-TEE integration testing
+version: v0.0.1
+type: kernel
+confinement: strict
+grade: stable
+build-base: core24
+
+platforms:
+  arm64:
+    build-on: [amd64]
+    build-for: [arm64]
+
+package-repositories:
+  - type: apt
+    architectures: [arm64]
+    formats: [deb, deb-src]
+    components: [main]
+    suites: [noble, noble-updates, noble-backports]
+    key-id: F6ECB3762474EDA9D21B7022871920D1991BC93C
+    url: http://ports.ubuntu.com/ubuntu-ports
+
+build-packages:
+  - binutils-aarch64-linux-gnu
+  - gcc-aarch64-linux-gnu
+  - libc6-dev-arm64-cross
+  - gcc-arm-linux-gnueabihf
+  - pkgconf
+
+hooks:
+  fde-setup:
+    plugs:
+      - tee
+      - home
+
+parts:
+  kernel:
+    plugin: nil
+    source: https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble
+    source-branch: master-next
+    source-type: git
+    source-depth: 1
+    build-packages:
+      - bc
+      - bison
+      - flex
+      - libssl-dev
+    override-build: |
+      ./debian/scripts/misc/annotations --arch arm64 --flavour generic --export > .config
+
+      # TODO: better way to do this?
+      make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+      scripts/config --disable SYSTEM_TRUSTED_KEYS
+      scripts/config --disable SYSTEM_REVOCATION_KEYS
+      scripts/config --disable ARM_FFA_TRANSPORT
+      make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+
+      make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
+
+      make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image
+      cp -a arch/arm64/boot/Image "${CRAFT_PART_INSTALL}/"
+
+      mkdir ./modules
+      make INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="./modules" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules_install
+
+      cp -a ./modules/lib/modules "${CRAFT_PART_INSTALL}/"
+    prime:
+      - -Image
+      - modules
+
+  optee-uc-fde:
+    plugin: dump
+    source: https://git.launchpad.net/~ondrak/+git/optee-uc-fde
+    source-type: git
+    source-branch: with-helper
+    organize:
+      '*': optee-uc-fde/
+    prime:
+      - -*
+
+  optee-os:
+    after: [optee-uc-fde]
+    plugin: nil
+    source: https://github.com/OP-TEE/optee_os.git
+    source-type: git
+    source-tag: 4.5.0
+    source-depth: 1
+    build-packages:
+      - device-tree-compiler
+      - python3-pyelftools
+    build-environment:
+      - DEBUG: "1"
+      - PLATFORM: "vexpress-qemu_armv8a"
+      - CFG_TEE_CORE_LOG_LEVEL: "4"
+      - CFG_EARLY_CONSOLE: "y"
+    override-build: |
+      cp -r ${CRAFT_STAGE}/optee-uc-fde/ta/fde_key_handler ./ta/
+
+      # compile optee_os the first time
+      make -j"$(nproc)"
+
+      # compile optee_os again, this time embedding the FDE TA via
+      # EARLY_TA_PATHS
+      make CFG_EARLY_TA=y EARLY_TA_PATHS="out/arm-plat-vexpress/ta/pkcs11/fd02c9da-306c-48c7-a49c-bbd827ae86ee.stripped.elf \
+        out/arm-plat-vexpress/ta/trusted_keys/f04a0fe7-1f5d-4b9b-abf7-619b85b4ce8c.stripped.elf \
+        out/arm-plat-vexpress/ta/fde_key_handler/fd1b2a86-3668-11eb-adc1-0242ac120002.stripped.elf" \
+        -j"$(nproc)"
+
+      cp -a ./out/arm-plat-vexpress/export-ta_arm64 "${CRAFT_PART_INSTALL}/"
+    prime:
+      - -*
+
+  optee-client:
+    plugin: nil
+    source: https://github.com/OP-TEE/optee_client.git
+    source-type: git
+    source-tag: 4.5.0
+    build-packages:
+      - uuid-dev:arm64
+      - python3-cryptography
+    build-environment:
+      - ARCH: "arm64"
+      - CROSS_COMPILE: "aarch64-linux-gnu-"
+      - CFG_TEE_CLIENT_LOAD_PATH: ""
+      - CFG_TA_TEST_PATH: "0"
+      - SBINDIR: "/usr/sbin"
+      - LIBDIR: "/usr/lib/aarch64-linux-gnu"
+      - DESTDIR: "${CRAFT_PART_INSTALL}"
+      - PKG_CONFIG: "pkg-config"
+      - PKG_CONFIG_PATH: "/usr/lib/aarch64-linux-gnu/pkgconfig"
+    override-build: |
+      make O=${CRAFT_PART_BUILD}/out -j$(nproc)
+      make install O=${CRAFT_PART_BUILD}/out
+    prime:
+      - usr/lib/*/lib*so*
+
+  optee-uc-fde-client:
+    after:
+      - optee-client
+      - optee-os
+      - optee-uc-fde
+    plugin: nil
+    source-type: local
+    build-packages:
+      - libjson-c-dev:arm64
+      - libcryptsetup-dev:arm64
+    build-environment:
+      - ARCH: "arm64"
+      - CROSS_COMPILE: "aarch64-linux-gnu-"
+      - TA_DEV_KIT_DIR: "${CRAFT_STAGE}/export-ta_arm64"
+      - OPTEE_CLIENT_EXPORT: "${CRAFT_STAGE}/usr"
+      - DESTDIR: "${CRAFT_PART_INSTALL}"
+      - LDFLAGS: "-L${CRAFT_STAGE}/usr/lib/aarch64-linux-gnu"
+    override-build: |
+      make -C ${CRAFT_STAGE}/optee-uc-fde O=${CRAFT_PART_BUILD}/out fde-key-manager fde-reveal-key fde-setup fde-helper
+      make -C ${CRAFT_STAGE}/optee-uc-fde O=${CRAFT_PART_BUILD}/out fde-key-manager fde-reveal-key fde-setup fde-helper install
+      install -D -m 755 ${CRAFT_PART_INSTALL}/usr/bin/fde-setup ${CRAFT_PART_INSTALL}/meta/hooks/fde-setup
+      ln -sf fde-reveal-key ${CRAFT_PART_INSTALL}/usr/bin/fde-setup
+    prime:
+      - meta/
+
+  chroot:
+    plugin: nil
+    build-packages:
+      - wget
+      - zstd
+    override-build: |
+      # building the initrd for an arm64 system requires that we use a arm64
+      # chroot with ubuntu-core-initramfs installed in it
+      wget https://cdimage.ubuntu.com/ubuntu-base/noble/daily/current/noble-base-arm64.tar.gz
+
+      mkdir fs
+      tar -xvf ./noble-base-arm64.tar.gz -C ./fs
+
+      finish() {
+        umount -R ./fs/{proc,run,sys,dev} || true
+      }
+      trap finish EXIT
+
+      cp --no-dereference /etc/resolv.conf ./fs/etc/resolv.conf
+      for m in proc run sys dev dev/pts dev/null dev/zero dev/full dev/random dev/urandom dev/tty; do
+        mount --bind "/${m}" "./fs/${m}"
+      done
+
+      chroot ./fs apt-get update
+      chroot ./fs apt-get install -y software-properties-common linux-firmware
+      chroot ./fs add-apt-repository ppa:snappy-dev/image -y
+      chroot ./fs apt-get update
+      chroot ./fs apt-get install -y ubuntu-core-initramfs
+
+      tar --zstd -cvf ${CRAFT_PART_INSTALL}/chroot.tar.zst -C ./fs .
+    prime:
+      - -*
+
+  initrd:
+    after: [kernel, optee-uc-fde-client, chroot]
+    plugin: nil
+    build-packages:
+      - cpio
+      - kmod
+      - qemu-user-static
+      - u-boot-tools
+      - zstd
+    override-build: |
+      mkdir fs
+      tar -xvf ${CRAFT_STAGE}/chroot.tar.zst -C ./fs
+
+      finish() {
+        umount -R ./fs/{proc,run,sys,dev} || true
+      }
+      trap finish EXIT
+
+      for m in proc run sys dev dev/pts dev/null dev/zero dev/full dev/random dev/urandom dev/tty; do
+        mount --bind "/${m}" "./fs/${m}"
+      done
+
+      # copy the modules to the chroot so that emulated ubuntu-core-initramfs
+      # can access them
+      cp -a "${CRAFT_STAGE}/modules" ./fs/tmp/
+
+      # this is how we configure ubuntu-core-initramfs to copy the tee and optee
+      # kernel modules into the initrd
+      mkdir -p ./fs/usr/lib/ubuntu-core-initramfs/modules/optee
+      echo tee > ./fs/usr/lib/ubuntu-core-initramfs/modules/optee/extra-modules.conf
+      echo optee >> ./fs/usr/lib/ubuntu-core-initramfs/modules/optee/extra-modules.conf
+
+      # since we're using the optee feature (that we've defined here), we can
+      # tell ubuntu-core-initramfs to add files to the initrd by putting them
+      # into a directory under /usr/lib/ubuntu-core-initramfs/optee
+      mkdir -p ./fs/usr/lib/ubuntu-core-initramfs/optee
+      for path in "${CRAFT_STAGE}/usr/bin/fde-reveal-key" "${CRAFT_STAGE}/usr/bin/fde-setup" "${CRAFT_STAGE}/usr/lib/aarch64-linux-gnu/libteec.so"*; do
+        install -D "${path}" "./fs/usr/lib/ubuntu-core-initramfs/optee/${path#${CRAFT_STAGE}}"
+      done
+
+      kernel_version=$(basename "${CRAFT_STAGE}/modules/"*)
+      chroot ./fs ubuntu-core-initramfs create-initrd --feature main optee --kernelver="${kernel_version}" --kerneldir "/tmp/modules/${kernel_version}" --firmwaredir '/lib/firmware' --output initrd.img
+
+      cp -a "./fs/initrd.img-${kernel_version}" "${CRAFT_PART_INSTALL}/initrd.img"
+
+      # steal the firmware from the arm64 chroot, it should be usable with the
+      # kernel we've just built
+      cp -a ./fs/lib/firmware "${CRAFT_PART_INSTALL}/"
+    prime:
+      - initrd.img
+      - firmware
+
+  # TODO: change this once PR #1 is merged
+  signing-keys:
+    plugin: dump
+    source: https://git.launchpad.net/~ondrak/+git/dev-keys
+    source-type: git
+    source-branch: master
+    organize:
+      '*': signing-keys/
+    prime:
+      - -*
+
+  fit:
+    after: [initrd, kernel, signing-keys]
+    plugin: nil
+    source: .
+    build-packages:
+      - u-boot-tools
+      - device-tree-compiler
+      - ipxe-qemu
+      - qemu-system-arm
+    override-build: |
+      cp ./qemu.its "${CRAFT_STAGE}/qemu.its"
+      mkimage --fit "${CRAFT_STAGE}/qemu.its" -k "${CRAFT_STAGE}/signing-keys" "${CRAFT_PART_INSTALL}/kernel.img"
+    prime:
+      - kernel.img
