@@ -79,7 +79,7 @@ unsigned char *base64_decode(const char *in_buf, size_t in_buf_len, size_t *buf_
     return decoded_buffer;
 }
 
-TEEC_Result invode_command(uint32_t cmd_id, TEEC_Operation *operation) {
+TEEC_Result invoke_command(uint32_t cmd_id, TEEC_Operation *operation) {
     TEEC_Context context;
     TEEC_Session session;
     TEEC_Result ret = TEEC_ERROR_GENERIC;
@@ -128,7 +128,7 @@ TEEC_Result encrypt_key(unsigned char *in_buf, size_t in_buf_len,
     operation.params[2].tmpref.size = *out_buf_len;
     operation.params[2].tmpref.buffer = out_buf;
 
-    ret = invode_command(TA_CMD_KEY_ENCRYPT, &operation);
+    ret = invoke_command(TA_CMD_KEY_ENCRYPT, &operation);
     if (ret == TEEC_SUCCESS) {
         *handle_len = operation.params[1].tmpref.size;
         *out_buf_len = operation.params[2].tmpref.size;
@@ -154,7 +154,7 @@ TEEC_Result decrypt_key(unsigned char *in_buf, size_t in_buf_len,
     operation.params[2].tmpref.size = *out_buf_len;
     operation.params[2].tmpref.buffer = out_buf;
 
-    ret = invode_command(TA_CMD_KEY_DECRYPT, &operation);
+    ret = invoke_command(TA_CMD_KEY_DECRYPT, &operation);
     if (ret == TEEC_SUCCESS) {
         *out_buf_len = operation.params[2].tmpref.size;
     }
@@ -172,7 +172,7 @@ TEEC_Result get_ta_lock(uint32_t *value) {
                                             TEEC_NONE,
                                             TEEC_NONE);
 
-    ret = invode_command(TA_CMD_GET_LOCK, &operation);
+    ret = invoke_command(TA_CMD_GET_LOCK, &operation);
     if (ret == TEEC_SUCCESS) {
         *value = operation.params[0].value.a;
     }
@@ -189,7 +189,7 @@ TEEC_Result lock_ta() {
                                             TEEC_NONE,
                                             TEEC_NONE);
 
-    return invode_command(TA_CMD_LOCK, &operation);
+    return invoke_command(TA_CMD_LOCK, &operation);
 }
 
 // generate random buffer
@@ -212,7 +212,7 @@ unsigned char *generate_rng(size_t len) {
                                             TEEC_NONE);
     operation.params[0].tmpref.size = len;
     operation.params[0].tmpref.buffer = buf;
-    ret = invode_command(TA_CMD_GEN_RANDOM, &operation);
+    ret = invoke_command(TA_CMD_GEN_RANDOM, &operation);
     if (TEEC_SUCCESS != ret) {
         free(buf);
         return NULL;
@@ -231,7 +231,7 @@ TEEC_Result get_ta_version(uint32_t *version) {
                                             TEEC_NONE,
                                             TEEC_NONE);
 
-    ret = invode_command(TA_CMD_TA_VERSION, &operation);
+    ret = invoke_command(TA_CMD_TA_VERSION, &operation);
     if (ret == TEEC_SUCCESS) {
         *version = operation.params[0].value.a;
     }
