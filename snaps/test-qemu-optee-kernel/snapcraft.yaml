@@ -104,6 +104,8 @@ parts:
       chroot ./fs apt-get update
       chroot ./fs apt-get install -y ubuntu-core-initramfs
 
+      finish
+
       tar --zstd -cvf ${CRAFT_PART_INSTALL}/chroot.tar.zst -C ./fs .
     prime:
       - -*
@@ -150,6 +152,8 @@ parts:
       echo tee > ./fs/usr/lib/ubuntu-core-initramfs/modules/optee/extra-modules.conf
       echo optee >> ./fs/usr/lib/ubuntu-core-initramfs/modules/optee/extra-modules.conf
 
+      cp ./fs/usr/lib/ubuntu-core-initramfs/main/usr/lib/snapd/info "${CRAFT_PART_INSTALL}/snapd-info"
+
       # since we're using the optee feature (that we've defined here), we can
       # tell ubuntu-core-initramfs to add files to the initrd by putting them
       # into a directory under /usr/lib/ubuntu-core-initramfs/optee
@@ -171,6 +175,7 @@ parts:
     prime:
       - initrd.img
       - firmware
+      - snapd-info
 
   # TODO: change this once PR #1 is merged
   signing-keys:

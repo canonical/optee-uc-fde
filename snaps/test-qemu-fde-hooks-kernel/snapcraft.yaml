@@ -16,7 +16,7 @@ package-repositories:
   - type: apt
     architectures: [arm64]
     formats: [deb, deb-src]
-    components: [main]
+    components: [main, universe]
     suites: [noble, noble-updates, noble-backports]
     key-id: F6ECB3762474EDA9D21B7022871920D1991BC93C
     url: http://ports.ubuntu.com/ubuntu-ports
@@ -113,31 +113,18 @@ parts:
 
   optee-client:
     plugin: nil
-    source: https://github.com/OP-TEE/optee_client.git
-    source-type: git
-    source-tag: 4.5.0
-    build-packages:
-      - uuid-dev:arm64
-      - python3-cryptography
-    build-environment:
-      - ARCH: "arm64"
-      - CROSS_COMPILE: "aarch64-linux-gnu-"
-      - CFG_TEE_CLIENT_LOAD_PATH: ""
-      - CFG_TA_TEST_PATH: "0"
-      - SBINDIR: "/usr/sbin"
-      - LIBDIR: "/usr/lib/aarch64-linux-gnu"
-      - DESTDIR: "${CRAFT_PART_INSTALL}"
-      - PKG_CONFIG: "pkg-config"
-      - PKG_CONFIG_PATH: "/usr/lib/aarch64-linux-gnu/pkgconfig"
-    override-build: |
-      make O=${CRAFT_PART_BUILD}/out -j$(nproc)
-      make install O=${CRAFT_PART_BUILD}/out
-    prime:
-      - usr/lib/*/lib*so*
+    stage-packages:
+      - optee-client-dev:arm64
+    stage:
+      - -usr/include/*
+      - -usr/share/doc/optee-client-dev/README.Debian
+      - -usr/share/doc/optee-client-dev/README.md
+      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libckteec.so*
+      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libseteec.so*
+      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libteeacl.so*
 
   optee-uc-fde-client:
     after:
-      - optee-client
       - optee-os
       - optee-uc-fde
     plugin: nil
@@ -145,6 +132,7 @@ parts:
     build-packages:
       - libjson-c-dev:arm64
       - libcryptsetup-dev:arm64
+      - optee-client-dev:arm64
     build-environment:
       - ARCH: "arm64"
       - CROSS_COMPILE: "aarch64-linux-gnu-"
@@ -189,6 +177,8 @@ parts:
       chroot ./fs apt-get update
       chroot ./fs apt-get install -y ubuntu-core-initramfs
 
+      finish
+
       tar --zstd -cvf ${CRAFT_PART_INSTALL}/chroot.tar.zst -C ./fs .
     prime:
       - -*
@@ -225,6 +215,8 @@ parts:
       echo tee > ./fs/usr/lib/ubuntu-core-initramfs/modules/optee/extra-modules.conf
       echo optee >> ./fs/usr/lib/ubuntu-core-initramfs/modules/optee/extra-modules.conf
 
+      cp ./fs/usr/lib/ubuntu-core-initramfs/main/usr/lib/snapd/info "${CRAFT_PART_INSTALL}/snapd-info"
+
       # since we're using the optee feature (that we've defined here), we can
       # tell ubuntu-core-initramfs to add files to the initrd by putting them
       # into a directory under /usr/lib/ubuntu-core-initramfs/optee
@@ -244,6 +236,7 @@ parts:
     prime:
       - initrd.img
       - firmware
+      - snapd-info
 
   # TODO: change this once PR #1 is merged
   signing-keys:
@@ -270,3 +263,4 @@ parts:
       mkimage --fit "${CRAFT_STAGE}/qemu.its" -k "${CRAFT_STAGE}/signing-keys" "${CRAFT_PART_INSTALL}/kernel.img"
     prime:
       - kernel.img
+      - qemu.its

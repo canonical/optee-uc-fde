@@ -192,9 +192,7 @@ parts:
     source: .
     override-build: |
       mkimage -A arm64 -T script -d boot.cmd "${CRAFT_PART_INSTALL}/boot.scr"
-      cp ./cloud.conf "${CRAFT_PART_INSTALL}/cloud.conf"
       touch "${CRAFT_PART_INSTALL}/uboot.conf"
     prime:
       - boot.scr
       - uboot.conf
-      - cloud.conf
