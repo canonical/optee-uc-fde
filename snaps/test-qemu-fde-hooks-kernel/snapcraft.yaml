@@ -114,14 +114,7 @@ parts:
   optee-client:
     plugin: nil
     stage-packages:
-      - optee-client-dev:arm64
-    stage:
-      - -usr/include/*
-      - -usr/share/doc/optee-client-dev/README.Debian
-      - -usr/share/doc/optee-client-dev/README.md
-      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libckteec.so*
-      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libseteec.so*
-      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libteeacl.so*
+      - libteec1:arm64
 
   optee-uc-fde-client:
     after:
