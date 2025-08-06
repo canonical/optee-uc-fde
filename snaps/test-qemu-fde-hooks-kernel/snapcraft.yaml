@@ -89,6 +89,7 @@ parts:
     build-packages:
       - device-tree-compiler
       - python3-pyelftools
+      - python3-cryptography
     build-environment:
       - DEBUG: "1"
       - PLATFORM: "vexpress-qemu_armv8a"
@@ -177,7 +178,7 @@ parts:
       - -*
 
   initrd:
-    after: [kernel, optee-uc-fde-client, chroot]
+    after: [kernel, optee-uc-fde-client, optee-client, chroot]
     plugin: nil
     build-packages:
       - cpio
