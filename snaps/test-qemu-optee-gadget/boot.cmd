@@ -25,7 +25,7 @@ for pathprefix in ${fk_image_locations}; do
   setenv kernel_vars "snap_kernel snap_try_kernel kernel_status"
   setenv recovery_vars "snapd_recovery_mode snapd_recovery_system snapd_recovery_kernel"
   setenv snapd_recovery_mode "install"
-  setenv snapd_standard_params "panic=-1 systemd.gpt_auto=0 snapd.debug=1 systemd.log_level=debug systemd.journald.forward_to_console=1 console=ttyAMA0"
+  setenv snapd_standard_params "panic=-1 systemd.gpt_auto=0 snapd.debug=1 systemd.journald.forward_to_console=1 console=ttyAMA0"
 
   env import -c ${kernel_addr_r} ${filesize} ${recovery_vars}
   setenv bootargs "${bootargs} snapd_recovery_mode=${snapd_recovery_mode} snapd_recovery_system=${snapd_recovery_system} ${snapd_standard_params}"
