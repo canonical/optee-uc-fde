@@ -66,14 +66,7 @@ parts:
   optee-client:
     plugin: nil
     stage-packages:
-      - optee-client-dev:arm64
-    stage:
-      - -usr/include/*
-      - -usr/share/doc/optee-client-dev/README.Debian
-      - -usr/share/doc/optee-client-dev/README.md
-      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libckteec.so*
-      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libseteec.so*
-      - -usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libteeacl.so*
+      - libteec1:arm64
 
   chroot:
     plugin: nil
@@ -110,18 +103,8 @@ parts:
     prime:
       - -*
 
-  # TODO: once everything is merged and released, we can just use the
-  # snap-bootstrap that ubuntu-core-initramfs pulls in
-  snap-bootstrap:
-    plugin: nil
-    source: .
-    override-build: |
-      cp -a ./snap-bootstrap "${CRAFT_PART_INSTALL}/snap-bootstrap"
-    prime:
-      - -*
-
   initrd:
-    after: [kernel, optee-client, chroot, snap-bootstrap]
+    after: [kernel, optee-client, chroot]
     plugin: nil
     build-packages:
       - cpio
@@ -161,8 +144,6 @@ parts:
       for path in "${CRAFT_STAGE}/usr/lib/aarch64-linux-gnu/libteec.so"*; do
         install -D "${path}" "./fs/usr/lib/ubuntu-core-initramfs/optee/${path#${CRAFT_STAGE}}"
       done
-
-      cp -a "${CRAFT_STAGE}/snap-bootstrap" ./fs/usr/lib/ubuntu-core-initramfs/main/usr/lib/snapd/snap-bootstrap
 
       kernel_version=$(basename "${CRAFT_STAGE}/modules/"*)
       chroot ./fs ubuntu-core-initramfs create-initrd --feature main optee --kernelver="${kernel_version}" --kerneldir "/tmp/modules/${kernel_version}" --firmwaredir '/lib/firmware' --output initrd.img
