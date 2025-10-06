@@ -61,7 +61,7 @@ parts:
 
   optee-fde:
     plugin: dump
-    source: https://git.launchpad.net/~ondrak/+git/optee-uc-fde
+    source: https://github.com/canonical/optee-uc-fde.git
     source-type: git
     source-branch: master
     organize:
