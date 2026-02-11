@@ -1,0 +1,33 @@
+volumes:
+  pc:
+    bootloader: u-boot
+    schema: gpt
+    structure:
+      - name: ubuntu-boot-state
+        role: system-boot-state
+        type: 3DE21764-95BD-54BD-A5C3-4ABE786F38A8
+        size: 1M
+        offset: 1M
+      - name: ubuntu-seed
+        role: system-seed
+        filesystem: vfat
+        type: C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+        size: 1200M
+        content:
+          - source: boot.scr
+            target: /boot.scr
+      - name: ubuntu-boot
+        role: system-boot
+        filesystem: vfat
+        type: 0FC63DAF-8483-4772-8E79-3D69D8477DE4
+        size: 750M
+      - name: ubuntu-save
+        role: system-save
+        filesystem: ext4
+        type: 0FC63DAF-8483-4772-8E79-3D69D8477DE4
+        size: 32M
+      - name: ubuntu-data
+        role: system-data
+        filesystem: ext4
+        type: 0FC63DAF-8483-4772-8E79-3D69D8477DE4
+        size: 1500M
