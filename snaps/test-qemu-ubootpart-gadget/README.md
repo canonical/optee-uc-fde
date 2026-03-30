@@ -13,10 +13,8 @@ This gadget uses the `ubootpart` bootloader instead:
 
 | | test-qemu-optee-gadget | test-qemu-ubootpart-gadget |
 |---|---|---|
-| Partition table | MBR | GPT |
 | Environment storage | File on FAT (`boot.sel`) | Raw partition (`ubuntu-boot-state`) |
-| Bootloader marker | `uboot.conf` | `ubootpart.conf` |
-| Reference env file | `boot.sel` | `ubootpart.sel` |
+| Bootloader marker | `uboot.conf` | N/A |
 | Redundancy | None (single file) | Two env copies in raw partition |
 | Runtime persistence | snapd writes file on FAT | snapd writes raw partition device |
 
