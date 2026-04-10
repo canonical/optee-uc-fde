@@ -189,7 +189,7 @@ static TEE_Result do_key_crypto( TEE_OperationMode mode,
     return res;
 }
 
-TEE_Result key_crypto( TEE_OperationMode mode,
+TEE_Result cmd_symmetric_key_crypto( TEE_OperationMode mode,
                        unsigned int paramTypes,
                        TEE_Param params[TEE_NUM_PARAMS]) {
 
