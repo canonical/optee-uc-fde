@@ -74,11 +74,16 @@ char *get_snap_hook_fde_setup_request(void) {
        return NULL;
     }
 
-    // read output
+    // read output — track remaining space to prevent overflow
     pos = request;
-    while (fgets(pos, MAX_JSON_BUF_SIZE, f) != NULL) {
-        pos = request + strlen(request);
+    size_t remaining = MAX_JSON_BUF_SIZE;
+    while (remaining > 1 && fgets(pos, (int)remaining, f) != NULL) {
+        size_t written = strlen(pos);
+        pos += written;
+        remaining -= written;
     }
+    /* ensure NUL-termination regardless of fgets behaviour */
+    request[MAX_JSON_BUF_SIZE - 1] = '\0';
 
     pclose(f);
     return request;
@@ -94,11 +99,13 @@ int set_snap_hook_fde_setup_request_result(const unsigned char *result, int len)
       return EXIT_FAILURE;
     }
 
-    fwrite(result, len, 1, out_stream);
-    fflush(out_stream);
-
-    if (ferror (out_stream)) {
+    if (fwrite(result, len, 1, out_stream) != 1) {
         ree_log(REE_ERROR, "Failed to write to fde-setup-result stdin");
+        ret = EXIT_FAILURE;
+    }
+    fflush(out_stream);
+    if (ferror(out_stream)) {
+        ree_log(REE_ERROR, "Error on fde-setup-result stream after flush");
         ret = EXIT_FAILURE;
     }
     pclose(out_stream);
@@ -132,13 +139,15 @@ char *get_initrd_fde_request() {
        return NULL;
     }
 
-    // start reading
-    size_remaining = MAX_JSON_BUF_SIZE;
+    // read until EOF or buffer full, always NUL-terminate
+    size_remaining = MAX_JSON_BUF_SIZE - 1;
     pos = request;
-    while((b_read = read(STDIN_FILENO, pos, size_remaining)) == size_remaining) {
-        size_remaining -= b_read;
+    while (size_remaining > 0 &&
+           (b_read = read(STDIN_FILENO, pos, size_remaining)) > 0) {
         pos += b_read;
+        size_remaining -= b_read;
     }
+    *pos = '\0';
     return request;
 }
 
@@ -247,10 +256,14 @@ int handle_operation_reveal(struct json_object *request_json) {
             free(sealed_key_buf);
         if (handle_buf)
             free(handle_buf);
-        if (unsealed_key_buf)
+        if (unsealed_key_buf) {
+            explicit_bzero(unsealed_key_buf, unsealed_key_buf_len);
             free(unsealed_key_buf);
-        if (unsealed_key)
+        }
+        if (unsealed_key) {
+            explicit_bzero(unsealed_key, strlen(unsealed_key));
             free(unsealed_key);
+        }
         if (j_response)
             json_object_put(j_response);
         if (j_unsealed_key)
@@ -325,6 +338,12 @@ int handle_operation_setup(struct json_object *request_json) {
         goto cleanup;
     }
 
+    if (!handle_buf) {
+        ree_log(REE_ERROR, "handle_buf alloc failed");
+        ret = EXIT_FAILURE;
+        goto cleanup;
+    }
+
     ret = encrypt_key(unsealed_key_buf,
                       unsealed_key_buf_len,
                       handle_buf,
@@ -382,8 +401,10 @@ int handle_operation_setup(struct json_object *request_json) {
             free(handle_buf);
         if (sealed_key_buf)
             free(sealed_key_buf);
-        if (unsealed_key_buf)
+        if (unsealed_key_buf) {
+            explicit_bzero(unsealed_key_buf, unsealed_key_buf_len);
             free(unsealed_key_buf);
+        }
         if (sealed_key)
             free(sealed_key);
         if (handle)
@@ -483,20 +504,26 @@ int encrypt_decrypt_selftest() {
     }
 
     cleanup:
-        if (key_buf)
+        if (key_buf) {
+            explicit_bzero(key_buf, key_buf_len);
             free(key_buf);
+        }
         if (base64_key)
             free(base64_key);
         if (handle_buf)
             free(handle_buf);
         if (sealed_key_buf)
             free(sealed_key_buf);
-        if (unsealed_key_buf)
+        if (unsealed_key_buf) {
+            explicit_bzero(unsealed_key_buf, unsealed_key_buf_len);
             free(unsealed_key_buf);
+        }
         if (sealed_key)
             free(sealed_key);
-        if (unsealed_key)
+        if (unsealed_key) {
+            explicit_bzero(unsealed_key, strlen(unsealed_key));
             free(unsealed_key);
+        }
 
         return ret;
 }
