@@ -44,7 +44,7 @@ static TEE_Result derive_ta_unique_key(uint8_t *key,
                                        uint32_t handle_size) {
 
   TEE_TASessionHandle sess = TEE_HANDLE_NULL;
-  TEE_Param params[TEE_NUM_PARAMS];
+  TEE_Param params[TEE_NUM_PARAMS] = { };
   TEE_Result res = TEE_ERROR_GENERIC;
   uint32_t ret_orig = 0;
   uint32_t param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
@@ -165,11 +165,15 @@ static TEE_Result do_key_crypto( TEE_OperationMode mode,
     attr.content.ref.buffer = huk_key;
     attr.content.ref.length = sizeof(huk_key);
 
-    if (TEE_PopulateTransientObject(hkey, &attr, 1)) {
+    res = TEE_PopulateTransientObject(hkey, &attr, 1);
+    if (res) {
+      EMSG("fde_key_handler: TEE_PopulateTransientObject failed: %#"PRIx32, res);
       goto out_key;
     }
 
-    if (TEE_SetOperationKey(crypto_op, hkey)) {
+    res = TEE_SetOperationKey(crypto_op, hkey);
+    if (res) {
+      EMSG("fde_key_handler: TEE_SetOperationKey failed: %#"PRIx32, res);
       goto out_key;
     }
 
@@ -254,13 +258,19 @@ TEE_Result cmd_symmetric_key_crypto( TEE_OperationMode mode,
       TEE_Free(rng_buf);
       handle->version = KEY_HANDLE_VERSION;
     } else {
-      assert(handle->version == KEY_HANDLE_VERSION);
+      if (handle->version != KEY_HANDLE_VERSION) {
+        EMSG("fde_key_handler: bad handle version %#"PRIx8, handle->version);
+        return TEE_ERROR_BAD_PARAMETERS;
+      }
     }
 
     res = do_key_crypto(mode, in, in_size, out, &out_size, handle);
     if (res == TEE_SUCCESS) {
-      // check size of output buffer, depending on op
-      assert(out_size == in_size);
+      if (out_size != in_size) {
+        EMSG("fde_key_handler: output size mismatch %"PRIu64" != %"PRIu64,
+             (uint64_t)out_size, (uint64_t)in_size);
+        return TEE_ERROR_SECURITY;
+      }
       params[2].memref.size = out_size;
       if (mode == TEE_MODE_ENCRYPT) {
         params[1].memref.size = sizeof(struct key_handle);
