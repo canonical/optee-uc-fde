@@ -21,7 +21,7 @@ from`snapctl` with parameter `fde-setup-request`. Returned request is json
 formatted string. Result of the operation is passed back to `snapctl` as json
 formatted sting with parameter `fde-setup-result`.
 When running within initramfs runtime. Operation to be performed is passed as
-json formated string on stdin. Result of the operation is returned
+json formatted string on stdin. Result of the operation is returned
 as json formatted string on stdout.
 * supported operations:
   * initial-setup: encrypt passed key, generate handle is supported.
@@ -31,7 +31,7 @@ as json formatted string on stdout.
                "handle": "<base64-generated-bytes>"}`
 
 ## Within initrd: executable `fde-reveal-key`
-Operation to be performed is passed as json formated string on stdin. Result
+Operation to be performed is passed as json formatted string on stdin. Result
 of the operation is returned as json formatted string on stdout.
 * supported operations:
   * reveal: reveal key from passed
