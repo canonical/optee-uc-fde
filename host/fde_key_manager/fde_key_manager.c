@@ -556,7 +556,7 @@ int handle_fde_operation(char *request_str) {
  * uses stdin/stdout or `snapctl` as way to retrieve input and pass the result.
  * `snapctl fde-setup-request` and `snapctl fde-setup-result` are used in snap hook
  * runtime environment.
- * Input and output are always passed as formated json.
+ * Input and output are always passed as formatted json.
  * For more information refer to: https://snapcraft.io/docs/uc20-fde-hooks
  *
  * - 'fde-reveal-key':
