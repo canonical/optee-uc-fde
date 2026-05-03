@@ -52,7 +52,7 @@ TEE_Result TA_InvokeCommandEntryPoint( void __maybe_unused *session_context,
     DLOG("FDE cmd_id = %#"PRIx32"\n", cmd_id);
     switch (cmd_id) {
         case TA_CMD_KEY_ENCRYPT:
-            return key_crypto(TEE_MODE_ENCRYPT, paramTypes, params);
+            return cmd_symmetric_key_crypto(TEE_MODE_ENCRYPT, param_types, params);
         case TA_CMD_KEY_DECRYPT:
             // make sure crypto opperations are not locked
             if ( _ta_lock == TA_LOCKED) {
