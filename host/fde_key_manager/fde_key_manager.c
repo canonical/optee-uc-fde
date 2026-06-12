@@ -127,7 +127,7 @@ int set_result(const unsigned char * result, int len) {
 }
 
 char *get_initrd_fde_request() {
-    size_t b_read = 0;
+    ssize_t b_read = 0;
     size_t size_remaining = 0;
     char *request = NULL;
     char *pos = NULL;
