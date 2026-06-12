@@ -82,6 +82,82 @@
  */
 #define TA_CMD_TA_VERSION                6U
 
+/* -----------------------------------------------------------------------
+ * Commands for Seed-Derived Asymmetric Crypto TA functionality
+ * ----------------------------------------------------------------------- */
+
+/*
+ * TA_CMD_AS_DERIVE_KEYPAIR
+ *   Derives a persistent key pair from the provided seed.
+ *   Must be called before any crypto command.
+ *
+ *   param[0] (memref-input)  : seed bytes (8 – 64 bytes)
+ *   param[1] (value-input)   : a = key algorithm (ALGO_*)
+ *                              b = key size in bits (KEY_SIZE_*)
+ *   param[2] (memref-output) : public key DER blob (caller-allocated)
+ *   param[3] (unused)
+ */
+#define TA_CMD_ASYMMETRIC_DERIVE_KEYPAIR      101U
+
+/*
+ * TA_CMD_AS_SIGN
+ *   Sign data with the derived private key (ECDSA / Ed25519 / RSA-PSS).
+ *
+ *   param[0] (memref-input)  : data to sign (≤ 8 KiB)
+ *   param[1] (memref-output) : signature blob
+ *   param[2] (unused)
+ *   param[3] (unused)
+ */
+#define TA_CMD_ASYMMETRIC_SIGN                102U
+
+/*
+ * TA_CMD_AS_DECRYPT
+ *   Decrypt data with the derived private key (RSA-OAEP only).
+ *
+ *   param[0] (memref-input)  : ciphertext
+ *   param[1] (memref-output) : plaintext
+ *   param[2] (unused)
+ *   param[3] (unused)
+ */
+#define TA_CMD_ASYMMETRIC_DECRYPT             103U
+
+/*
+ * TA_CMD_AS_GET_PUBKEY
+ *   Return DER-encoded public key for the currently derived key pair.
+ *
+ *   param[0] (memref-output) : public key DER blob
+ *   param[1] (unused)
+ *   param[2] (unused)
+ *   param[3] (unused)
+ */
+#define TA_CMD_ASYMMETRIC_GET_PUBKEY          104U
+
+/* -----------------------------------------------------------------------
+ * Algorithm selectors (param[1].a for CMD_DERIVE_KEYPAIR)
+ * ----------------------------------------------------------------------- */
+#define ALGO_RSA                0x00000001   /* RSA-PSS sign + OAEP enc  */
+#define ALGO_ECDSA              0x00000002   /* ECDSA on NIST P-256/384  */
+
+/* Key sizes (param[1].b for CMD_DERIVE_KEYPAIR) */
+#define KEY_SIZE_RSA_2048       2048
+#define KEY_SIZE_RSA_3072       3072
+#define KEY_SIZE_RSA_4096       4096
+#define KEY_SIZE_EC_256         256
+#define KEY_SIZE_EC_384         384
+
+/* -----------------------------------------------------------------------
+ * Return codes (TA-private; GP error codes used on the CA side)
+ * ----------------------------------------------------------------------- */
+#define SEED_CRYPTO_ERR_NO_KEY          0xF0000001  /* cmd before derive  */
+#define SEED_CRYPTO_ERR_BAD_ALGO        0xF0000002
+#define SEED_CRYPTO_ERR_BAD_SEED        0xF0000003
+#define SEED_CRYPTO_ERR_BUF_TOO_SMALL   0xF0000004
+
+/* Convenience */
+#define SEED_MIN_LEN    8
+#define SEED_MAX_LEN    64
+
+
 /* Define the debug flag */
 #define DEBUG
 #define DLOG    MSG_RAW
