@@ -37,16 +37,28 @@
 #include "fde_key_handler_ta_type.h"
 #include "rsa_key_manager_ca.h"
 
+static int hex_nibble(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
 /*
  * Decode a lowercase or uppercase hex string into a freshly malloc'd buffer.
+ * The input must be bare hex ([0-9a-fA-F] only) with an even number of
+ * characters; strip any sha256sum-style " filename" suffix before passing.
  * Returns NULL on bad input.  *out_len is set to the number of decoded bytes.
  */
 static unsigned char *hex_decode(const char *str, size_t *out_len)
 {
     size_t hex_len = strlen(str);
-    /* sha256sum appends a trailing space+filename; accept bare hex too */
-    if (hex_len % 2 != 0) {
-        fprintf(stderr, "error: hex seed has odd number of characters\n");
+    if (hex_len == 0 || hex_len % 2 != 0) {
+        fprintf(stderr, "error: hex seed must have an even, non-zero number of characters\n");
         return NULL;
     }
     size_t bin_len = hex_len / 2;
@@ -54,14 +66,15 @@ static unsigned char *hex_decode(const char *str, size_t *out_len)
     if (!buf)
         return NULL;
     for (size_t i = 0; i < bin_len; i++) {
-        unsigned int byte;
-        if (sscanf(str + i * 2, "%02x", &byte) != 1) {
+        int hi = hex_nibble(str[i * 2]);
+        int lo = hex_nibble(str[i * 2 + 1]);
+        if (hi < 0 || lo < 0) {
             fprintf(stderr, "error: invalid hex character at position %zu\n",
-                    i * 2);
+                    hi < 0 ? i * 2 : i * 2 + 1);
             free(buf);
             return NULL;
         }
-        buf[i] = (unsigned char)byte;
+        buf[i] = (unsigned char)((hi << 4) | lo);
     }
     *out_len = bin_len;
     return buf;
