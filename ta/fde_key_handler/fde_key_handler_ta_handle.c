@@ -1206,8 +1206,10 @@ TEE_Result cmd_asymmetric_derive_keypair(session_ctx_t *ctx,
     if (param_types != exp)
         return TEE_ERROR_BAD_PARAMETERS;
 
-
-    if (seed_len < SEED_MIN_LEN || seed_len > SEED_MAX_LEN)
+    if (!seed || seed_len < SEED_MIN_LEN || seed_len > SEED_MAX_LEN)
+        return TEE_ERROR_BAD_PARAMETERS;
+    if (!params[2].memref.buffer || !params[2].memref.size ||
+        params[2].memref.size > ASYM_MAX_OUTPUT_SIZE)
         return TEE_ERROR_BAD_PARAMETERS;
 
     switch (algo) {
@@ -1248,6 +1250,9 @@ TEE_Result cmd_asymmetric_get_pubkey(session_ctx_t *ctx,
                                    TEE_PARAM_TYPE_NONE);
     if (param_types != exp)
         return TEE_ERROR_BAD_PARAMETERS;
+    if (!params[0].memref.buffer || !params[0].memref.size ||
+        params[0].memref.size > ASYM_MAX_OUTPUT_SIZE)
+        return TEE_ERROR_BAD_PARAMETERS;
     if (!ctx->key_ready)
         return TEE_ERROR_BAD_STATE;
 
@@ -1284,6 +1289,10 @@ TEE_Result cmd_asymmetric_sign(session_ctx_t *ctx,
     TEE_OperationHandle hash_op;
 
     if (param_types != exp)
+        return TEE_ERROR_BAD_PARAMETERS;
+    if (!data || !data_len || data_len > ASYM_MAX_INPUT_SIZE)
+        return TEE_ERROR_BAD_PARAMETERS;
+    if (!sig || !sig_len || sig_len > ASYM_MAX_OUTPUT_SIZE)
         return TEE_ERROR_BAD_PARAMETERS;
     if (!ctx->key_ready)
         return TEE_ERROR_BAD_STATE;
@@ -1352,6 +1361,12 @@ TEE_Result cmd_asymmetric_decrypt(session_ctx_t *ctx,
     size_t out_len;
 
     if (param_types != exp)
+        return TEE_ERROR_BAD_PARAMETERS;
+    if (!params[0].memref.buffer || !params[0].memref.size ||
+        params[0].memref.size > ASYM_MAX_INPUT_SIZE)
+        return TEE_ERROR_BAD_PARAMETERS;
+    if (!params[1].memref.buffer || !params[1].memref.size ||
+        params[1].memref.size > ASYM_MAX_OUTPUT_SIZE)
         return TEE_ERROR_BAD_PARAMETERS;
     if (!ctx->key_ready)
         return TEE_ERROR_BAD_STATE;
