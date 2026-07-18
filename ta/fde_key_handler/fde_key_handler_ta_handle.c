@@ -499,6 +499,34 @@ err_clean:
  * ========================================================================= */
 
 /*
+ * build_kdf_info — assemble an HKDF info label as prefix || key_bits (BE32).
+ *
+ * The key size must be part of the label: HKDF-Expand output for a shorter
+ * request is a prefix of the output for a longer one with the same info, so
+ * without this, keys of different sizes derived from the same seed would
+ * share their top bytes (e.g. the RSA-2048 prime candidate would equal the
+ * high half of the RSA-4096 one, and compromise of one key would reveal
+ * enough bits of the other to factor it).
+ *
+ * Returns the total label length; 'buf' must hold strlen(prefix) + 4 bytes.
+ */
+#define KDF_INFO_MAX_LEN 40
+
+static size_t build_kdf_info(uint8_t *buf, size_t buf_sz,
+                             const char *prefix, uint32_t key_bits)
+{
+    size_t plen = strlen(prefix);
+
+    assert(plen + 4 <= buf_sz);
+    TEE_MemMove(buf, prefix, plen);
+    buf[plen + 0] = (uint8_t)(key_bits >> 24);
+    buf[plen + 1] = (uint8_t)(key_bits >> 16);
+    buf[plen + 2] = (uint8_t)(key_bits >> 8);
+    buf[plen + 3] = (uint8_t)(key_bits);
+    return plen + 4;
+}
+
+/*
  * bigint_alloc — allocate and initialise a TEE_BigInt for 'bits' bits.
  * Returns NULL on OOM.  Caller must call bigint_free() when done.
  */
@@ -669,8 +697,13 @@ static TEE_Result derive_rsa_keypair(session_ctx_t *ctx,
 
     TEE_Attribute attrs[8];
 
-    static const uint8_t p_info[] = "seed_crypto_ta:rsa:p:v1";
-    static const uint8_t q_info[] = "seed_crypto_ta:rsa:q:v1";
+    /* HKDF labels are domain-separated by key size, see build_kdf_info() */
+    uint8_t p_info[KDF_INFO_MAX_LEN];
+    uint8_t q_info[KDF_INFO_MAX_LEN];
+    size_t  p_info_len = build_kdf_info(p_info, sizeof(p_info),
+                                        "seed_crypto_ta:rsa:p:v1", key_bits);
+    size_t  q_info_len = build_kdf_info(q_info, sizeof(q_info),
+                                        "seed_crypto_ta:rsa:q:v1", key_bits);
 
     /* ------------------------------------------------------------------ */
     /* 0. Bind seed to device HUK                                          */
@@ -689,11 +722,11 @@ static TEE_Result derive_rsa_keypair(session_ctx_t *ctx,
     if (!p || !q) { res = TEE_ERROR_OUT_OF_MEMORY; goto cleanup; }
 
     res = derive_prime(bound_seed, sizeof(bound_seed), half_bits,
-                       p_info, sizeof(p_info) - 1, p);
+                       p_info, p_info_len, p);
     if (res != TEE_SUCCESS) goto cleanup;
 
     res = derive_prime(bound_seed, sizeof(bound_seed), half_bits,
-                       q_info, sizeof(q_info) - 1, q);
+                       q_info, q_info_len, q);
     if (res != TEE_SUCCESS) goto cleanup;
 
     if (TEE_BigIntCmp(p, q) == 0) {
@@ -877,7 +910,10 @@ static TEE_Result derive_ec_keypair(session_ctx_t *ctx,
 
     /* Choose curve */
     uint32_t curve;
-    static const uint8_t ec_info[] = "seed_crypto_ta:ecdsa:v1";
+    /* HKDF label is domain-separated by key size, see build_kdf_info() */
+    uint8_t ec_info[KDF_INFO_MAX_LEN];
+    size_t  ec_info_len = build_kdf_info(ec_info, sizeof(ec_info),
+                                         "seed_crypto_ta:ecdsa:v1", key_bits);
     uint8_t *priv;
     size_t scalar_bytes = key_bits / 8;
     TEE_Attribute attrs[2];
@@ -901,7 +937,7 @@ static TEE_Result derive_ec_keypair(session_ctx_t *ctx,
     }
 
     res = hkdf_sha256(bound_seed, sizeof(bound_seed),
-                      ec_info, sizeof(ec_info) - 1,
+                      ec_info, ec_info_len,
                       priv, scalar_bytes);
     TEE_MemFill(bound_seed, 0, sizeof(bound_seed));
     if (res != TEE_SUCCESS) {
