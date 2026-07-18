@@ -87,23 +87,25 @@
  * ----------------------------------------------------------------------- */
 
 /*
- * TA_CMD_AS_DERIVE_KEYPAIR
- *   Derives a persistent key pair from the provided seed.
- *   Must be called before any crypto command.
+ * TA_CMD_ASYMMETRIC_DERIVE_KEYPAIR
+ *   Derives a per-session key pair from the provided seed.
+ *   Must be called before any other asymmetric command in the session.
+ *   The public key is returned as PKCS#1 RSAPublicKey DER (RSA) or an
+ *   uncompressed point 0x04 || X || Y (ECDSA).
  *
- *   param[0] (memref-input)  : seed bytes (8 – 64 bytes)
+ *   param[0] (memref-input)  : seed bytes (SEED_MIN_LEN – SEED_MAX_LEN)
  *   param[1] (value-input)   : a = key algorithm (ALGO_*)
  *                              b = key size in bits (KEY_SIZE_*)
- *   param[2] (memref-output) : public key DER blob (caller-allocated)
+ *   param[2] (memref-output) : public key blob (caller-allocated)
  *   param[3] (unused)
  */
 #define TA_CMD_ASYMMETRIC_DERIVE_KEYPAIR      101U
 
 /*
- * TA_CMD_AS_SIGN
- *   Sign data with the derived private key (ECDSA / Ed25519 / RSA-PSS).
+ * TA_CMD_ASYMMETRIC_SIGN
+ *   Sign data with the derived private key (RSA-PSS / ECDSA).
  *
- *   param[0] (memref-input)  : data to sign (≤ 8 KiB)
+ *   param[0] (memref-input)  : data to sign (≤ ASYM_MAX_INPUT_SIZE)
  *   param[1] (memref-output) : signature blob
  *   param[2] (unused)
  *   param[3] (unused)
@@ -111,10 +113,10 @@
 #define TA_CMD_ASYMMETRIC_SIGN                102U
 
 /*
- * TA_CMD_AS_DECRYPT
+ * TA_CMD_ASYMMETRIC_DECRYPT
  *   Decrypt data with the derived private key (RSA-OAEP only).
  *
- *   param[0] (memref-input)  : ciphertext
+ *   param[0] (memref-input)  : ciphertext (≤ ASYM_MAX_INPUT_SIZE)
  *   param[1] (memref-output) : plaintext
  *   param[2] (unused)
  *   param[3] (unused)
@@ -122,10 +124,11 @@
 #define TA_CMD_ASYMMETRIC_DECRYPT             103U
 
 /*
- * TA_CMD_AS_GET_PUBKEY
- *   Return DER-encoded public key for the currently derived key pair.
+ * TA_CMD_ASYMMETRIC_GET_PUBKEY
+ *   Return the public key for the currently derived key pair, in the same
+ *   encoding as TA_CMD_ASYMMETRIC_DERIVE_KEYPAIR.
  *
- *   param[0] (memref-output) : public key DER blob
+ *   param[0] (memref-output) : public key blob
  *   param[1] (unused)
  *   param[2] (unused)
  *   param[3] (unused)
@@ -144,14 +147,6 @@
 #define KEY_SIZE_RSA_4096       4096
 #define KEY_SIZE_EC_256         256
 #define KEY_SIZE_EC_384         384
-
-/* -----------------------------------------------------------------------
- * Return codes (TA-private; GP error codes used on the CA side)
- * ----------------------------------------------------------------------- */
-#define SEED_CRYPTO_ERR_NO_KEY          0xF0000001  /* cmd before derive  */
-#define SEED_CRYPTO_ERR_BAD_ALGO        0xF0000002
-#define SEED_CRYPTO_ERR_BAD_SEED        0xF0000003
-#define SEED_CRYPTO_ERR_BUF_TOO_SMALL   0xF0000004
 
 /* Convenience */
 #define SEED_MIN_LEN    8

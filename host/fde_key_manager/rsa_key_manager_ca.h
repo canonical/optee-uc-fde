@@ -35,8 +35,9 @@ void        rsa_close_session(rsa_session_t *sess);
 
 /*
  * rsa_derive_keypair - TA_CMD_ASYMMETRIC_DERIVE_KEYPAIR
- *   Derives a keypair from @seed inside the TA and returns the DER-encoded
- *   public key in @pubkey_buf / *@pubkey_len.
+ *   Derives a keypair from @seed inside the TA and returns the public key
+ *   in @pubkey_buf / *@pubkey_len (PKCS#1 RSAPublicKey DER for RSA, an
+ *   uncompressed point 0x04 || X || Y for ECDSA).
  *   Must be called once per session before any of the operations below.
  */
 TEEC_Result rsa_derive_keypair(rsa_session_t *sess,
@@ -46,7 +47,8 @@ TEEC_Result rsa_derive_keypair(rsa_session_t *sess,
 
 /*
  * rsa_get_pubkey - TA_CMD_ASYMMETRIC_GET_PUBKEY
- *   Return the DER-encoded public key for the already-derived keypair.
+ *   Return the public key for the already-derived keypair, in the same
+ *   encoding as rsa_derive_keypair().
  */
 TEEC_Result rsa_get_pubkey(rsa_session_t *sess,
                            unsigned char *pubkey_buf, size_t *pubkey_len);

@@ -342,7 +342,7 @@ TEE_Result get_ta_version( uint32_t types, TEE_Param params[TEE_NUM_PARAMS]) {
 }
 
 /* =========================================================================
- * Asynchronous Crypto implementation
+ * Asymmetric Crypto implementation
  * ========================================================================= */
 
 /* =========================================================================
@@ -1243,10 +1243,12 @@ TEE_Result cmd_asymmetric_derive_keypair(session_ctx_t *ctx,
     if (res != TEE_SUCCESS)
         return res;
 
-    /* Export public key DER into param[2] */
-    /* GP doesn't have a single DER export; we export the raw EC point or
-     * RSA modulus/exponent via TEE_GetObjectBufferAttribute and build a
-     * minimal SubjectPublicKeyInfo ourselves. */
+    /*
+     * Export the public key into param[2].  GP has no DER export, so we
+     * read the attributes via TEE_GetObjectBufferAttribute and build the
+     * encoding ourselves: PKCS#1 RSAPublicKey DER for RSA, an uncompressed
+     * point (0x04 || X || Y) for ECDSA.
+     */
     return get_pubkey_internal(ctx, &params[2].memref.buffer,
                                    &params[2].memref.size);
 }

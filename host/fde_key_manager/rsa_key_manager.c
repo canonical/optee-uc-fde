@@ -8,13 +8,14 @@
  * crypto commands.
  *
  * Usage:
- *   rsa-key-manager --action <action> --seed <b64> \
+ *   rsa-key-manager --action <action> (--seed <b64> | --seed-hex <hex> | --seed-stdin) \
  *                   --algo <rsa|ecdsa> --key-size <N> [action-options]
  *
  * Actions:
  *   get-pubkey
- *       Derives a keypair from the seed and prints the DER-encoded public key
- *       (base64) to stdout.
+ *       Derives a keypair from the seed and prints the public key (base64)
+ *       to stdout: PKCS#1 RSAPublicKey DER for RSA, an uncompressed point
+ *       0x04 || X || Y for ECDSA.
  *
  *   sign   --data <b64-data>
  *       Signs the data (base64) with the derived private key.
@@ -108,7 +109,8 @@ static void print_help(const char *prog)
         "\n"
         "Actions:\n"
         "  get-pubkey\n"
-        "      Derive keypair and print DER public key (base64) to stdout.\n"
+        "      Derive keypair and print public key (base64) to stdout.\n"
+        "      RSA keys are printed as PKCS#1 RSAPublicKey DER.\n"
         "\n"
         "  sign --data <b64-data>\n"
         "      Sign data with the derived private key.\n"
