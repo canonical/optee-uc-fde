@@ -1124,22 +1124,36 @@ static TEE_Result export_ec_pubkey_der(TEE_ObjectHandle kp,
     size_t coord = key_bits / 8;
     size_t needed = 1 + 2 * coord;  /* 0x04 || X || Y */
     uint8_t *out = buf;
-    size_t xlen = (uint32_t)coord, ylen = (uint32_t)coord;
+    /* large enough for a P-384 coordinate */
+    uint8_t tmp[48];
+    size_t xlen = sizeof(tmp), ylen = sizeof(tmp);
     TEE_Result res;
 
-    if (*buf_len < needed)
+    if (coord > sizeof(tmp))
+        return TEE_ERROR_NOT_SUPPORTED;
+    if (*buf_len < needed) {
+        *buf_len = needed;
         return TEE_ERROR_SHORT_BUFFER;
+    }
 
+    /*
+     * TEE_GetObjectBufferAttribute strips leading zero bytes, but the
+     * uncompressed point format requires fixed-size big-endian
+     * coordinates: left-pad each one with zeros to 'coord' bytes.
+     */
     res = TEE_GetObjectBufferAttribute(kp, TEE_ATTR_ECC_PUBLIC_VALUE_X,
-                                       out + 1, &xlen);
-    if (res != TEE_SUCCESS) {
-        return res;
-    }
+                                       tmp, &xlen);
+    if (res != TEE_SUCCESS || xlen > coord)
+        return res != TEE_SUCCESS ? res : TEE_ERROR_SECURITY;
+    TEE_MemFill(out + 1, 0, coord - xlen);
+    TEE_MemMove(out + 1 + (coord - xlen), tmp, xlen);
+
     res = TEE_GetObjectBufferAttribute(kp, TEE_ATTR_ECC_PUBLIC_VALUE_Y,
-                                       out + 1 + coord, &ylen);
-    if (res != TEE_SUCCESS) {
-        return res;
-    }
+                                       tmp, &ylen);
+    if (res != TEE_SUCCESS || ylen > coord)
+        return res != TEE_SUCCESS ? res : TEE_ERROR_SECURITY;
+    TEE_MemFill(out + 1 + coord, 0, coord - ylen);
+    TEE_MemMove(out + 1 + coord + (coord - ylen), tmp, ylen);
 
     out[0]  = 0x04;
     *buf_len = needed;
