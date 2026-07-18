@@ -900,8 +900,15 @@ cleanup:
  * then the ECDSA private scalar is derived from that bound seed via HKDF.
  * Same seed + same device → same keypair; same seed + different device →
  * different keypair.
+ *
+ * DISABLED: OP-TEE requires TEE_ATTR_ECC_PUBLIC_VALUE_X/Y as mandatory
+ * attributes when populating a TEE_TYPE_ECDSA_KEYPAIR and provides no API
+ * to compute the public point from a private scalar, so the
+ * TEE_PopulateTransientObject() call below panics.  Re-enable once the
+ * public point is computed (EC scalar multiplication over the TEE BigInt
+ * API or an equivalent construction).
  */
-static TEE_Result derive_ec_keypair(session_ctx_t *ctx,
+static TEE_Result __maybe_unused derive_ec_keypair(session_ctx_t *ctx,
                                     const uint8_t *seed, size_t seed_len,
                                     uint32_t key_bits) {
     TEE_Result res;
@@ -946,12 +953,13 @@ static TEE_Result derive_ec_keypair(session_ctx_t *ctx,
     }
 
     /*
-     * Clamp the scalar to be in [1, n-1].
-     * For P-256 / P-384 the HKDF output is treated as a big-endian integer.
-     * Setting the top bit ensures it's ≥ 1; the GP stack handles clamping
-     * to curve order internally when TEE_ATTR_ECC_PRIVATE_VALUE is supplied.
+     * Ensure the scalar is non-zero.  This sets bit 8*(scalar_bytes-1) of
+     * the big-endian scalar, i.e. fixes one bit of the keyspace; a proper
+     * implementation should instead reduce the HKDF output into [1, n-1]
+     * (n = curve order).  Scalars >= n are not rejected here either — both
+     * to be addressed when this path is re-enabled.
      */
-    priv[0] |= 0x01;   /* ensure non-zero */
+    priv[0] |= 0x01;
 
     res = TEE_AllocateTransientObject(TEE_TYPE_ECDSA_KEYPAIR, key_bits, &kp);
     if (res != TEE_SUCCESS) {
@@ -1161,10 +1169,13 @@ TEE_Result cmd_asymmetric_derive_keypair(session_ctx_t *ctx,
             res = derive_rsa_keypair(ctx, seed, seed_len, key_bits);
             break;
         case ALGO_ECDSA:
-            if (key_bits != 256 && key_bits != 384)
-                return TEE_ERROR_BAD_PARAMETERS;
-            res = derive_ec_keypair(ctx, seed, seed_len, key_bits);
-            break;
+            /*
+             * ECDSA derivation is disabled: derive_ec_keypair() cannot
+             * populate the keypair object without the public point, which
+             * OP-TEE does not compute from the private scalar.  See the
+             * comment on derive_ec_keypair().
+             */
+            return TEE_ERROR_NOT_SUPPORTED;
         default:
             return TEE_ERROR_BAD_PARAMETERS;
     }
