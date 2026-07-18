@@ -559,7 +559,11 @@ static void bigint_free(TEE_BigInt *bi, uint32_t bits)
  *   1. Use HKDF-SHA256(seed, label) to produce an initial odd candidate.
  *   2. Force top 2 bits set — ensures bit-length is exactly 'bits', and that
  *      p×q spans the full 2×'bits' bit-width.
- *   3. Walk upward by +2 (staying odd) until TEE_BigIntIsProbablePrime passes.
+ *   3. Walk upward by +2 (staying odd) until TEE_BigIntIsProbablePrime passes
+ *      and p ≢ 1 (mod 65537).  Primes with p ≡ 1 (mod e) would make
+ *      gcd(e, φ(n)) != 1 so no private exponent exists; skipping them here
+ *      keeps the search deterministic and guarantees every seed yields a
+ *      usable key (rather than a permanent, seed-dependent failure).
  *
  * 'out' must be pre-allocated with at least (bits + 64) bit capacity to
  * absorb the upward walk without overflow.
@@ -578,6 +582,8 @@ static TEE_Result derive_prime(const uint8_t *seed, size_t seed_len,
     uint32_t    nbytes = bits / 8;
     uint8_t    *cand   = NULL;
     TEE_BigInt *two    = NULL;
+    TEE_BigInt *pub_e  = NULL;
+    TEE_BigInt *rem    = NULL;
     uint32_t    iter;
 
     cand = TEE_Malloc(nbytes, TEE_MALLOC_FILL_ZERO);
@@ -585,11 +591,15 @@ static TEE_Result derive_prime(const uint8_t *seed, size_t seed_len,
         return TEE_ERROR_OUT_OF_MEMORY;
 
     two = bigint_alloc(8);
-    if (!two) {
+    pub_e = bigint_alloc(32);
+    rem = bigint_alloc(32);
+    if (!two || !pub_e || !rem) {
         res = TEE_ERROR_OUT_OF_MEMORY;
         goto out;
     }
     TEE_BigIntConvertFromS32(two, 2);
+    /* must match the public exponent used in derive_rsa_keypair() */
+    TEE_BigIntConvertFromS32(pub_e, 65537);
 
     res = hkdf_sha256(seed, seed_len, label, label_len, cand, nbytes);
     if (res != TEE_SUCCESS)
@@ -604,8 +614,12 @@ static TEE_Result derive_prime(const uint8_t *seed, size_t seed_len,
 
     for (iter = 0; iter < RSA_PRIME_SEARCH_MAX; iter++) {
         if (TEE_BigIntIsProbablePrime(out, 80)) {
-            res = TEE_SUCCESS;
-            goto out;
+            /* reject primes with p ≡ 1 (mod e), see function comment */
+            TEE_BigIntMod(rem, out, pub_e);
+            if (TEE_BigIntCmpS32(rem, 1) != 0) {
+                res = TEE_SUCCESS;
+                goto out;
+            }
         }
         TEE_BigIntAdd(out, out, two);
     }
@@ -620,6 +634,8 @@ out:
         TEE_Free(cand);
     }
     bigint_free(two, 8);
+    bigint_free(pub_e, 32);
+    bigint_free(rem, 32);
     return res;
 }
 
@@ -774,10 +790,14 @@ static TEE_Result derive_rsa_keypair(session_ctx_t *ctx,
     d = bigint_alloc(key_bits + 2);
     if (!d) { res = TEE_ERROR_OUT_OF_MEMORY; goto cleanup; }
 
+    /*
+     * derive_prime() already rejects primes ≡ 1 (mod e), so this cannot
+     * trigger; kept as defense in depth since TEE_BigIntInvMod panics on
+     * gcd != 1.
+     */
     if (!TEE_BigIntRelativePrime(e, phi)) {
-        EMSG("seed_crypto_ta: gcd(e, phi(n)) != 1 — seed produces "
-             "a prime p or q divisible by e=65537; try a different seed");
-        res = TEE_ERROR_BAD_PARAMETERS;
+        EMSG("seed_crypto_ta: gcd(e, phi(n)) != 1");
+        res = TEE_ERROR_SECURITY;
         goto cleanup;
     }
     TEE_BigIntInvMod(d, e, phi);
