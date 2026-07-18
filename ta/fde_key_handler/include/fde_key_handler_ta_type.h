@@ -157,6 +157,11 @@
 #define SEED_MIN_LEN    8
 #define SEED_MAX_LEN    64
 
+/* Upper bound for asymmetric command inputs (data to sign, ciphertext) */
+#define ASYM_MAX_INPUT_SIZE   (8 * 1024)
+/* Upper bound for asymmetric command outputs (pubkey, signature, plaintext) */
+#define ASYM_MAX_OUTPUT_SIZE  (8 * 1024)
+
 
 /* Define the debug flag */
 #define DEBUG
