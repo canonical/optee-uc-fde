@@ -67,10 +67,30 @@ static unsigned char *hex_decode(const char *str, size_t *out_len)
     return buf;
 }
 
+/*
+ * Read a base64 seed as a single line from stdin.
+ * Unlike --seed/--seed-hex it does not expose the seed to other processes
+ * via the command line (/proc/<pid>/cmdline).
+ */
+static unsigned char *read_seed_stdin(size_t *out_len)
+{
+    char line[256];
+    unsigned char *seed;
+
+    if (!fgets(line, sizeof(line), stdin)) {
+        fprintf(stderr, "error: failed to read seed from stdin\n");
+        return NULL;
+    }
+    line[strcspn(line, "\r\n")] = '\0';
+    seed = rsa_b64_decode(line, out_len);
+    explicit_bzero(line, sizeof(line));
+    return seed;
+}
+
 static void print_help(const char *prog)
 {
     printf(
-        "Usage: %s --action <action> (--seed <b64> | --seed-hex <hex>)\n"
+        "Usage: %s --action <action> (--seed <b64> | --seed-hex <hex> | --seed-stdin)\n"
         "          --algo <rsa|ecdsa> --key-size <N> [action-options]\n"
         "\n"
         "Actions:\n"
@@ -89,8 +109,11 @@ static void print_help(const char *prog)
         "  --algo rsa                  (ecdsa is not yet supported)\n"
         "  --key-size 2048|3072|4096\n"
         "  --seed <base64>             Seed bytes, base64-encoded\n"
-        "  --seed-hex <hex>            Seed bytes, hex-encoded (e.g. sha256sum output)\n"
-        "  Decoded seed must be %d-%d bytes. Exactly one of --seed / --seed-hex required.\n",
+        "  --seed-hex <hex>            Seed bytes, hex-encoded\n"
+        "  --seed-stdin                Read base64 seed line from stdin (preferred;\n"
+        "                              not visible in the process list)\n"
+        "  Decoded seed must be %d-%d bytes.\n"
+        "  Exactly one of --seed / --seed-hex / --seed-stdin is required.\n",
         prog, SEED_MIN_LEN, SEED_MAX_LEN);
 }
 
@@ -102,6 +125,16 @@ static const char *arg_get(int argc, char *argv[], const char *flag)
             return argv[i + 1];
     }
     return NULL;
+}
+
+/* Return 1 if the bare @flag is present. */
+static int arg_has(int argc, char *argv[], const char *flag)
+{
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], flag) == 0)
+            return 1;
+    }
+    return 0;
 }
 
 static uint32_t parse_algo(const char *str)
@@ -133,17 +166,21 @@ int main(int argc, char *argv[])
     const char *action    = arg_get(argc, argv, "--action");
     const char *seed_b64  = arg_get(argc, argv, "--seed");
     const char *seed_hex  = arg_get(argc, argv, "--seed-hex");
+    int         seed_stdin = arg_has(argc, argv, "--seed-stdin");
     const char *algo_str  = arg_get(argc, argv, "--algo");
     const char *ksize_str = arg_get(argc, argv, "--key-size");
 
-    if (!action || (!seed_b64 && !seed_hex) || !algo_str || !ksize_str) {
+    int seed_sources = (seed_b64 != NULL) + (seed_hex != NULL) + seed_stdin;
+
+    if (!action || seed_sources == 0 || !algo_str || !ksize_str) {
         fprintf(stderr,
-                "error: --action, --seed or --seed-hex, --algo and --key-size are required\n\n");
+                "error: --action, a seed source, --algo and --key-size are required\n\n");
         print_help(argv[0]);
         return EXIT_FAILURE;
     }
-    if (seed_b64 && seed_hex) {
-        fprintf(stderr, "error: --seed and --seed-hex are mutually exclusive\n");
+    if (seed_sources > 1) {
+        fprintf(stderr,
+                "error: --seed, --seed-hex and --seed-stdin are mutually exclusive\n");
         return EXIT_FAILURE;
     }
 
@@ -167,17 +204,22 @@ int main(int argc, char *argv[])
 
     /* ---- Decode seed ---- */
     size_t seed_len = 0;
-    unsigned char *seed = seed_hex ? hex_decode(seed_hex, &seed_len)
-                                   : rsa_b64_decode(seed_b64, &seed_len);
+    unsigned char *seed;
+    if (seed_stdin)
+        seed = read_seed_stdin(&seed_len);
+    else if (seed_hex)
+        seed = hex_decode(seed_hex, &seed_len);
+    else
+        seed = rsa_b64_decode(seed_b64, &seed_len);
     if (!seed) {
-        fprintf(stderr, "error: failed to decode --%s\n",
-                seed_hex ? "seed-hex" : "seed");
+        fprintf(stderr, "error: failed to decode seed\n");
         return EXIT_FAILURE;
     }
     if (seed_len < SEED_MIN_LEN || seed_len > SEED_MAX_LEN) {
         fprintf(stderr,
                 "error: seed must be %d-%d bytes after decoding (got %zu)\n",
                 SEED_MIN_LEN, SEED_MAX_LEN, seed_len);
+        explicit_bzero(seed, seed_len);
         free(seed);
         return EXIT_FAILURE;
     }
@@ -185,6 +227,7 @@ int main(int argc, char *argv[])
     /* ---- Open TEE session ---- */
     rsa_session_t sess;
     if (rsa_open_session(&sess) != TEEC_SUCCESS) {
+        explicit_bzero(seed, seed_len);
         free(seed);
         return EXIT_FAILURE;
     }
