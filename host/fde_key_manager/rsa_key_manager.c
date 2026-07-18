@@ -86,8 +86,8 @@ static void print_help(const char *prog)
         "      Prints base64-encoded plaintext to stdout.\n"
         "\n"
         "Common options:\n"
-        "  --algo rsa|ecdsa\n"
-        "  --key-size 2048|3072|4096   (RSA)  or  256|384  (ECDSA)\n"
+        "  --algo rsa                  (ecdsa is not yet supported)\n"
+        "  --key-size 2048|3072|4096\n"
         "  --seed <base64>             Seed bytes, base64-encoded\n"
         "  --seed-hex <hex>            Seed bytes, hex-encoded (e.g. sha256sum output)\n"
         "  Decoded seed must be %d-%d bytes. Exactly one of --seed / --seed-hex required.\n",
@@ -153,6 +153,11 @@ int main(int argc, char *argv[])
     if (!algo) {
         fprintf(stderr, "error: unknown algo '%s' (use rsa or ecdsa)\n",
                 algo_str);
+        return EXIT_FAILURE;
+    }
+    if (algo == ALGO_ECDSA) {
+        /* The TA rejects ALGO_ECDSA as well; fail early with a clear message */
+        fprintf(stderr, "error: ecdsa support is not yet available\n");
         return EXIT_FAILURE;
     }
     if (!key_bits) {
