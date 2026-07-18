@@ -1046,71 +1046,85 @@ static size_t der_tlv(uint8_t *dst, uint8_t tag, const uint8_t *val, size_t vlen
  */
 static TEE_Result export_rsa_pubkey_der(TEE_ObjectHandle kp,
                                         void *buf, size_t *buf_len) {
-    /* Get modulus size first */
     TEE_ObjectInfo info;
-    uint8_t *mod;
-    size_t mod_len;
-    uint8_t *mod_tag_buf;
-    uint8_t  exp_buf[4] = { 0x01, 0x00, 0x01 };  /* 65537 */
+    uint8_t *mod = NULL;      /* raw modulus                                */
+    uint8_t *mod_int = NULL;  /* modulus as DER INTEGER value               */
+    uint8_t *tmp = NULL;      /* concatenated INTEGER TLVs                  */
+    uint8_t  exp_raw[8];
+    uint8_t  exp_int[sizeof(exp_raw) + 1];
+    size_t   exp_raw_len = sizeof(exp_raw);
+    size_t   exp_int_len;
+    size_t   mod_len, mod_int_len;
+    size_t   off = 0;
+    size_t   needed;
     TEE_Result res;
-    uint8_t *tmp;
-    size_t  mod_der_val_len;
-    size_t off = 0;
-    uint8_t *out;
-    size_t needed;
 
-    TEE_GetObjectInfo1(kp, &info);
-    mod_len = (info.objectSize / 8);
+    res = TEE_GetObjectInfo1(kp, &info);
+    if (res != TEE_SUCCESS)
+        return res;
+    mod_len = info.objectSize / 8;
 
-    mod_tag_buf = TEE_Malloc(mod_len + 1, TEE_MALLOC_FILL_ZERO);
-    if (!mod_tag_buf)
-        return TEE_ERROR_OUT_OF_MEMORY;
-
-    mod  = TEE_Malloc(mod_len + 4, TEE_MALLOC_FILL_ZERO);
-    if (!mod)
-        return TEE_ERROR_OUT_OF_MEMORY;
-
-    res = TEE_GetObjectBufferAttribute(kp,
-                         TEE_ATTR_RSA_MODULUS, mod, &mod_len);
-    if (res != TEE_SUCCESS) {
-      TEE_Free(mod);
-      return res;
+    mod     = TEE_Malloc(mod_len, TEE_MALLOC_FILL_ZERO);
+    mod_int = TEE_Malloc(mod_len + 1, TEE_MALLOC_FILL_ZERO);
+    /* two INTEGER TLVs: tag + up to 3 length bytes each, plus values */
+    tmp     = TEE_Malloc(mod_len + 1 + sizeof(exp_int) + 8, TEE_MALLOC_FILL_ZERO);
+    if (!mod || !mod_int || !tmp) {
+        res = TEE_ERROR_OUT_OF_MEMORY;
+        goto out;
     }
 
-    /* INTEGER (modulus) – prepend 0x00 if high bit set */
-    tmp = TEE_Malloc(mod_len + 4 + 16, TEE_MALLOC_FILL_ZERO);
-    if (!tmp) {
-      TEE_Free(mod);
-      return TEE_ERROR_OUT_OF_MEMORY;
+    res = TEE_GetObjectBufferAttribute(kp, TEE_ATTR_RSA_MODULUS,
+                                       mod, &mod_len);
+    if (res != TEE_SUCCESS)
+        goto out;
+
+    res = TEE_GetObjectBufferAttribute(kp, TEE_ATTR_RSA_PUBLIC_EXPONENT,
+                                       exp_raw, &exp_raw_len);
+    if (res != TEE_SUCCESS)
+        goto out;
+    if (mod_len == 0 || exp_raw_len == 0) {
+        res = TEE_ERROR_BAD_STATE;
+        goto out;
     }
 
+    /* INTEGER values need a 0x00 prefix when the high bit is set */
     if (mod[0] & 0x80) {
-        mod_tag_buf[0] = 0x00;
-        TEE_MemMove(mod_tag_buf + 1, mod, mod_len);
-        mod_der_val_len = mod_len + 1;
+        mod_int[0] = 0x00;
+        TEE_MemMove(mod_int + 1, mod, mod_len);
+        mod_int_len = mod_len + 1;
     } else {
-        TEE_MemMove(mod_tag_buf, mod, mod_len);
-        mod_der_val_len = mod_len;
+        TEE_MemMove(mod_int, mod, mod_len);
+        mod_int_len = mod_len;
+    }
+    if (exp_raw[0] & 0x80) {
+        exp_int[0] = 0x00;
+        TEE_MemMove(exp_int + 1, exp_raw, exp_raw_len);
+        exp_int_len = exp_raw_len + 1;
+    } else {
+        TEE_MemMove(exp_int, exp_raw, exp_raw_len);
+        exp_int_len = exp_raw_len;
     }
 
-    off += der_tlv(tmp + off, 0x02, mod_tag_buf, mod_der_val_len);
-    off += der_tlv(tmp + off, 0x02, exp_buf, 3);
+    off += der_tlv(tmp + off, 0x02, mod_int, mod_int_len);
+    off += der_tlv(tmp + off, 0x02, exp_int, exp_int_len);
 
-    /* Wrap in outer SEQUENCE */
-    out = buf;
+    /* Wrap in outer SEQUENCE: tag + up to 3 length bytes */
     needed = 4 + off;
     if (*buf_len < needed) {
-        TEE_Free(mod);
-        TEE_Free(tmp);
-        return TEE_ERROR_SHORT_BUFFER;
+        /* report the required size per the GP short-buffer convention */
+        *buf_len = needed;
+        res = TEE_ERROR_SHORT_BUFFER;
+        goto out;
     }
 
-    *buf_len = der_tlv(out, 0x30, tmp, off);
+    *buf_len = der_tlv(buf, 0x30, tmp, off);
+    res = TEE_SUCCESS;
 
+out:
     TEE_Free(mod);
-    TEE_Free(mod_tag_buf);
+    TEE_Free(mod_int);
     TEE_Free(tmp);
-    return TEE_SUCCESS;
+    return res;
 }
 
 /*
