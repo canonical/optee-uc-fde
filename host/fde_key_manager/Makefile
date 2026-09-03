@@ -43,7 +43,7 @@ LDFLAGS += -L$(OPTEE_CLIENT_EXPORT)/lib -lteec -ljson-c
 LDFLAGS += -lpthread -lm
 
 .PHONY: all
-all: fde-reveal-key fde-setup fde-key-manager fde-helper
+all: fde-reveal-key fde-setup fde-key-manager
 
 fde-reveal-key: $(objs_key)
 	@echo "  LD      $(out-dir)/fde_key_manager/$@"
@@ -56,10 +56,6 @@ fde-setup: $(objs_key)
 fde-key-manager: $(objs_key)
 	@echo "  LD      $(out-dir)/fde_key_manager/$@"
 	$(q)@$(CC) -o $(out-dir)/fde_key_manager/$@ $+ $(LDFLAGS)
-
-fde-helper: $(objs_helper)
-	@echo "  LD      $(out-dir)/fde_key_manager/$@"
-	$(q)@$(CC) -o $(out-dir)/fde_key_manager/$@ $+ $(LDFLAGS) -lcryptsetup
 
 $(out-dir)/fde_key_manager/%.o: $(CURDIR)/%.c
 	$(q)mkdir -p $(out-dir)/fde_key_manager

@@ -25,7 +25,7 @@ CROSS_COMPILE_HOST ?= $(CROSS_COMPILE)
 CROSS_COMPILE_TA ?= $(CROSS_COMPILE)
 
 .PHONY: all
-all: ta fde-reveal-key fde-setup fde-key-manager fde-helper
+all: ta fde-reveal-key fde-setup fde-key-manager
 
 .PHONY: fde-reveal-key
 fde-reveal-key:
@@ -43,13 +43,6 @@ fde-setup:
 
 .PHONY: fde-key-manager
 fde-key-manager:
-	$(q)$(MAKE) -C host/fde_key_manager CROSS_COMPILE="$(CROSS_COMPILE_HOST)" \
-			     --no-builtin-variables \
-			     O=$(out-dir) \
-			     $@
-
-.PHONY: fde-helper
-fde-helper:
 	$(q)$(MAKE) -C host/fde_key_manager CROSS_COMPILE="$(CROSS_COMPILE_HOST)" \
 			     --no-builtin-variables \
 			     O=$(out-dir) \
@@ -74,4 +67,3 @@ install:
 	$(q)if [ -e $(out-dir)/fde_key_manager/fde-key-manager ]; then cp -a $(out-dir)/fde_key_manager/fde-key-manager ${DESTDIR}/usr/bin; fi
 	$(q)if [ -e $(out-dir)/fde_key_manager/fde-reveal-key ]; then cp -a $(out-dir)/fde_key_manager/fde-reveal-key ${DESTDIR}/usr/bin; fi
 	$(q)if [ -e $(out-dir)/fde_key_manager/fde-setup ]; then cp -a $(out-dir)/fde_key_manager/fde-setup ${DESTDIR}/usr/bin; fi
-	$(q)if [ -e $(out-dir)/fde_key_manager/fde-helper ]; then cp -a $(out-dir)/fde_key_manager/fde-helper ${DESTDIR}/usr/bin; fi
