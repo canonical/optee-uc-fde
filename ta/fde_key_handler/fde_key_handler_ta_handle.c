@@ -22,6 +22,24 @@
 #define TAG_SIZE        16
 #define KEY_HANDLE_VERSION 'U'
 
+/*
+ * The GP TEE Internal Core API changed the type of the length parameters of
+ * TEE_AEEncryptFinal()/TEE_AEDecryptFinal() (destLen, tagLen) from uint32_t to
+ * size_t. Select a matching local length type so the TA builds against any
+ * supported OP-TEE version:
+ *   - OP-TEE <= 3.19 does not define __OPTEE_CORE_API_COMPAT_1_1 and expects
+ *     uint32_t.
+ *   - OP-TEE >= 3.20 always defines __OPTEE_CORE_API_COMPAT_1_1 (to 0 when
+ *     unset). Value 0 selects the current size_t variant; value 1 selects the
+ *     legacy uint32_t (__GP11) variant.
+ * So size_t is used only when the macro is defined and 0; otherwise uint32_t.
+ */
+#if defined(__OPTEE_CORE_API_COMPAT_1_1) && !__OPTEE_CORE_API_COMPAT_1_1
+typedef size_t tee_ae_len_t;
+#else
+typedef uint32_t tee_ae_len_t;
+#endif
+
 // Trusted Key Handle
 struct key_handle {
     uint8_t version; // reserved to recognise the version
@@ -88,7 +106,8 @@ static TEE_Result do_key_encrypt( TEE_OperationHandle crypto_op,
                                   struct key_handle *handle) {
 
     TEE_Result res = TEE_ERROR_GENERIC;
-    size_t tag_len = TAG_SIZE;
+    tee_ae_len_t tag_len = TAG_SIZE;
+    tee_ae_len_t enc_key_len = *enc_key_sz;
 
     res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
     if (res) {
@@ -97,10 +116,12 @@ static TEE_Result do_key_encrypt( TEE_OperationHandle crypto_op,
     }
 
     res = TEE_AEEncryptFinal(crypto_op, key, key_sz, enc_key,
-                             enc_key_sz, handle->tag, &tag_len);
+                            &enc_key_len, handle->tag, &tag_len);
+    *enc_key_sz = enc_key_len;
+
     if (res || tag_len != TAG_SIZE || *enc_key_sz != key_sz) {
-      EMSG("fde_key_handler: key encrypt failed: [%"PRIu64", %"PRIu32"], [%"PRIu64", %"PRIu64"], %#"PRIx32"\n",
-            tag_len, TAG_SIZE, *enc_key_sz, key_sz, res);
+      EMSG("fde_key_handler: key encrypt failed: [%"PRIu32", %"PRIu32"], [%"PRIu64", %"PRIu64"], %#"PRIx32"\n",
+            (uint32_t)tag_len, (uint32_t)TAG_SIZE, (uint64_t)*enc_key_sz, (uint64_t)key_sz, res);
       res = res ? res: TEE_ERROR_SECURITY;
     }
 
@@ -114,6 +135,7 @@ static TEE_Result do_key_decrypt( TEE_OperationHandle crypto_op,
 
     TEE_Result res = TEE_ERROR_GENERIC;
     uint8_t tag[TAG_SIZE] = { 0 };
+    tee_ae_len_t key_len = *key_sz;
 
     res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
     if (res) {
@@ -123,11 +145,12 @@ static TEE_Result do_key_decrypt( TEE_OperationHandle crypto_op,
 
     memcpy(tag, handle->tag, TAG_SIZE);
     res = TEE_AEDecryptFinal(crypto_op, enc_key, enc_key_sz, key,
-           key_sz, tag, TAG_SIZE);
+           &key_len, tag, TAG_SIZE);
+    *key_sz = key_len;
 
     if (res || enc_key_sz != *key_sz) {
       EMSG("fde_key_handler: key decrypt failed: [%"PRIx64", %"PRIx64"], %#"PRIx32"\n",
-           enc_key_sz, *key_sz, res);
+           (uint64_t)enc_key_sz, (uint64_t)*key_sz, res);
       res = res ? res: TEE_ERROR_SECURITY;
     }
 
