@@ -59,7 +59,7 @@ TEE_Result TA_InvokeCommandEntryPoint( void __maybe_unused *session_context,
                 EMSG("fde_key_handler: TA is locked for further decrypt oprerations!!");
                 return TEE_ERROR_ACCESS_DENIED;
             }
-            return key_crypto(TEE_MODE_DECRYPT, paramTypes, params);
+            return cmd_symmetric_key_crypto(TEE_MODE_DECRYPT, paramTypes, params);
         case TA_CMD_LOCK:
             return lock_ta(paramTypes, params);
         case TA_CMD_GET_LOCK:
