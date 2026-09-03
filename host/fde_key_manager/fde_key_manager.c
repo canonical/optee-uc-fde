@@ -103,12 +103,14 @@ int set_snap_hook_fde_setup_request_result(const unsigned char *result, int len)
         ree_log(REE_ERROR, "Failed to write to fde-setup-result stdin");
         ret = EXIT_FAILURE;
     }
-    fflush(out_stream);
-    if (ferror(out_stream)) {
+    if (fflush(out_stream) == EOF || ferror(out_stream)) {
         ree_log(REE_ERROR, "Error on fde-setup-result stream after flush");
         ret = EXIT_FAILURE;
     }
-    pclose(out_stream);
+    if (pclose(out_stream) != 0) {
+         ree_log(REE_ERROR, "fde-setup-result command failed");
+         ret = EXIT_FAILURE;
+     }
     return ret;
 }
 
