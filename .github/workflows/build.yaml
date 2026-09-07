@@ -16,6 +16,14 @@ on:
 jobs:
   build-ta:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        optee-version:
+          - 3.10.0
+          - 3.20.0
+          - 4.0.0
+          - 4.8.0
+          - 4.10.0
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -27,7 +35,7 @@ jobs:
         with:
           repository: op-tee/optee_os
           path: optee
-          ref: 753afbbee1682f5d16fd30e87b31058a4fd4f4b8 # 4.10.0
+          ref: ${{ matrix.optee-version }}
           persist-credentials: false
       - name: Install build dependencies
         env:
@@ -35,12 +43,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gcc-aarch64-linux-gnu \
-            gcc-arm-linux-gnueabihf device-tree-compiler python3-pyelftools
+            gcc-arm-linux-gnueabihf device-tree-compiler python3-pyelftools \
+            python3-pycryptodome
       - name: Build OP-TEE
         env:
           PLATFORM: vexpress-qemu_armv8a
           CFG_EARLY_TA: y
           CFG_IN_TREE_EARLY_TAS: fde_key_handler/fd1b2a86-3668-11eb-adc1-0242ac120002
+          # Workaround for building earlier versions of OP-TEE with newer binutils
+          LDFLAGS: --no-warn-rwx-segments --no-warn-execstack
         run: |
           ln -svr optee-uc-fde/ta/fde_key_handler optee/ta/
           make -C optee -j"$(nproc)"
