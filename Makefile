@@ -1,8 +1,7 @@
 ifeq ($O,)
 out-dir := $(CURDIR)/out
 else
-include scripts/common.mk
-out-dir := $(call strip-trailing-slashes-and-dots,$(O))
+out-dir := $(abspath $(O))
 ifeq ($(out-dir),)
 $(error invalid output directory (O=$(O)))
 endif

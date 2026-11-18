@@ -2,8 +2,7 @@
 # path to be on a certain location to fit together with the other OP-TEE
 # gits and helper scripts.
 
-include ../../scripts/common.mk
-out-dir := $(call strip-trailing-slashes-and-dots,$(O))
+out-dir := $(abspath $(O))
 ifeq ($(out-dir),)
 $(error invalid output directory (O=$(O)))
 endif
