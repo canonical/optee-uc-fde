@@ -1,0 +1,64 @@
+summary: Locking the TA stops keys being revealed until the next reboot
+
+details: |
+  Seals a key and locks the TA, then reboots. The sealed key is kept in the
+  task directory, which is on the data disk and survives the reboot. After the
+  reboot the TA must be unlocked again and reveal the same key, which also
+  checks that the key derived from the hardware unique key doesn't change.
+
+execute: |
+  # Seal a base64-encoded key, and print the JSON result
+  seal_key() {
+    jq -n --arg key "$1" '{"op": "initial-setup", "key": $key, "key-name": "spread-test"}' | fde-setup
+  }
+
+  # Reveal a key from its sealed key and handle, and print it
+  reveal_key() {
+    jq -n --arg sealed "$1" --arg handle "$2" '{"op": "reveal", "sealed-key": $sealed, "handle": $handle}' |
+      fde-reveal-key | jq -er .key
+  }
+
+  if [ "$SPREAD_REBOOT" = 0 ]; then
+    fde-key-manager --ta-lock-status | MATCH '^Lock status: UNLOCKED$'
+
+    head -c 64 /dev/urandom | base64 -w0 > key
+    seal_key "$(cat key)" > sealed.json
+    sealed_key=$(jq -er '."sealed-key"' sealed.json)
+    handle=$(jq -er .handle sealed.json)
+    test "$(reveal_key "$sealed_key" "$handle")" = "$(cat key)"
+
+    echo '{"op": "lock"}' | fde-reveal-key
+    fde-key-manager --ta-lock-status | MATCH '^Lock status: LOCKED$'
+
+    if reveal_key "$sealed_key" "$handle"; then
+      echo "key revealed while the TA is locked"
+      exit 1
+    fi
+
+    # Only decryption is locked
+    seal_key "$(cat key)" | jq -e .handle
+
+    REBOOT
+  fi
+
+  # The project prepare script doesn't run again after a reboot. The OP-TEE
+  # driver is a module, and tee-supplicant.service fails if it starts before
+  # /dev/teepriv0 exists.
+  modprobe optee
+  for _ in $(seq 60); do
+    if [ -c /dev/teepriv0 ]; then
+      break
+    fi
+    sleep 1
+  done
+  if ! systemctl is-active --quiet tee-supplicant.service; then
+    systemctl restart tee-supplicant.service
+  fi
+
+  fde-key-manager --ta-lock-status | MATCH '^Lock status: UNLOCKED$'
+  sealed_key=$(jq -er '."sealed-key"' sealed.json)
+  handle=$(jq -er .handle sealed.json)
+  test "$(reveal_key "$sealed_key" "$handle")" = "$(cat key)"
+
+restore: |
+  rm -f key sealed.json

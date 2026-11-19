@@ -1,0 +1,174 @@
+---
+project: optee-uc-fde
+
+# The root filesystem is a read-only squashfs image, so the project is stored
+# on a separate data disk, mounted on /srv, which persists across reboots
+path: /srv/optee-uc-fde
+
+# The tests run against the binaries installed in the root filesystem, so only
+# the test scripts need to be sent
+include:
+  - tests/
+
+environment:
+  TA_UUID: fd1b2a86-3668-11eb-adc1-0242ac120002
+
+backends:
+  qemu-optee:
+    type: adhoc
+    # Boots the qemu_fw.bios and rootfs.img artifacts produced by
+    # bincraft.yaml. U-Boot loads the kernel from /boot in rootfs.img.
+    # Extract the bincraft package into .spread-qemu/artifacts first:
+    #   mkdir -p .spread-qemu/artifacts
+    #   tar -xJf optee-uc-fde-test-binaries_*_arm64.tar.xz \
+    #     -C .spread-qemu/artifacts
+    # Settings, taken from the environment Spread runs in:
+    #   OPTEE_TEST_ARTIFACTS  Directory containing the artifacts, instead of
+    #                         .spread-qemu/artifacts
+    #   QEMU_SMP              Number of CPUs (default: 2). OP-TEE is built for
+    #                         at most 4.
+    #   QEMU_MEM              Memory size (default: 1024M)
+    #   QEMU_BOOT_TIMEOUT     Seconds to wait for SSH (default: 900)
+    #   QEMU_DATA_SIZE        Size of the data disk (default: 1G)
+    # QEMU, console and OP-TEE logs are kept in .spread-qemu/logs/.
+    allocate: |
+      # The spread snap's confinement doesn't allow running QEMU or the other
+      # tools used here
+      if [ -n "${SNAP_NAME:-}" ]; then
+        FATAL "the spread snap can't run this backend, install it with" \
+          "go install github.com/canonical/spread/cmd/spread@latest"
+      fi
+      # mke2fs is in /usr/sbin
+      PATH="$PATH:/usr/sbin:/sbin"
+      state_dir="$PWD/.spread-qemu"
+      mkdir -p "$state_dir/run" "$state_dir/logs"
+
+      artifacts=$(realpath "${OPTEE_TEST_ARTIFACTS:-$state_dir/artifacts}")
+      for file in qemu_fw.bios rootfs.img; do
+        if [ ! -f "$artifacts/$file" ]; then
+          FATAL "$artifacts/$file not found, extract the bincraft package there"
+        fi
+      done
+
+      # Claim a free port by creating its run directory. Workers allocate in
+      # parallel, so take turns: Ubuntu's mkdir (uutils) isn't atomic, and two
+      # processes creating the same directory at once can both succeed.
+      exec 9>"$state_dir/allocate.lock"
+      flock 9
+      port=""
+      for p in $(seq 5022 5121); do
+        if mkdir "$state_dir/run/$p" 2>/dev/null; then
+          if (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; then
+            rmdir "$state_dir/run/$p"
+            continue
+          fi
+          port="$p"
+          break
+        fi
+      done
+      # Closing the lock file releases the lock, and keeps QEMU from inheriting
+      # it
+      exec 9>&-
+      if [ -z "$port" ]; then
+        ERROR "no free port between 5022 and 5121"
+      fi
+      run="$state_dir/run/$port"
+      console="$state_dir/logs/$port-console.log"
+      qemu_log="$state_dir/logs/$port-qemu.log"
+
+      # Release the port and stop QEMU if anything below fails
+      trap 'pkill -9 -F "$run/qemu.pid" 2>/dev/null || true; rm -rf "$run"' EXIT
+
+      # Writable disk for the Spread project and test data. It survives guest
+      # reboots and is deleted on discard. The root filesystem's fstab mounts
+      # it on /srv by its label.
+      truncate -s "${QEMU_DATA_SIZE:-1G}" "$run/data.img"
+      mke2fs -q -F -t ext4 -L spread-data "$run/data.img"
+
+      # The root disk must come first: U-Boot loads the kernel from virtio
+      # device 0, and the kernel command line set by U-Boot uses /dev/vda.
+      # QEMU must not keep this script's output open, as Spread waits for it
+      # to be closed.
+      rootfs="$artifacts/rootfs.img"
+      if ! qemu-system-aarch64 \
+          -machine virt,secure=on \
+          -cpu cortex-a57 \
+          -smp "${QEMU_SMP:-2}" \
+          -m "${QEMU_MEM:-1024M}" \
+          -accel tcg,thread=multi \
+          -bios "$artifacts/qemu_fw.bios" \
+          -drive "file=$rootfs,if=none,format=raw,id=root,readonly=on" \
+          -device virtio-blk-pci,drive=root \
+          -drive "file=$run/data.img,if=none,format=raw,id=data" \
+          -device virtio-blk-pci,drive=data \
+          -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$port-:22" \
+          -device virtio-net-pci,netdev=net0,romfile= \
+          -display none \
+          -monitor none \
+          -serial "file:$console" \
+          -serial "file:$state_dir/logs/$port-optee.log" \
+          -daemonize \
+          -pidfile "$run/qemu.pid" \
+          </dev/null >"$qemu_log" 2>&1; then
+        ERROR "failed to start QEMU: $(tail -n 1 "$qemu_log")"
+      fi
+      pid=$(cat "$run/qemu.pid")
+
+      # QEMU accepts connections on the forwarded port straight away, so wait
+      # for sshd to answer. Spread only retries logging in for about a minute.
+      boot_timeout=${QEMU_BOOT_TIMEOUT:-900}
+      deadline=$((SECONDS + boot_timeout))
+      while true; do
+        banner=$(timeout 10 bash -c \
+          'exec 3<>"/dev/tcp/127.0.0.1/$1" && head -c 4 <&3' _ "$port" \
+          2>/dev/null || true)
+        if [ "$banner" = "SSH-" ]; then
+          break
+        fi
+        if ! kill -0 "$pid" 2>/dev/null; then
+          tail -n 50 "$console" || true
+          ERROR "QEMU exited before SSH was available, see $console"
+        fi
+        if [ "$SECONDS" -ge "$deadline" ]; then
+          tail -n 50 "$console" || true
+          ERROR "SSH not available after ${boot_timeout}s, see $console"
+        fi
+        sleep 5
+      done
+
+      # The VM is now owned by Spread, which stops it with the discard script
+      trap - EXIT
+      ADDRESS "127.0.0.1:$port"
+    discard: |
+      run="$PWD/.spread-qemu/run/${SPREAD_SYSTEM_ADDRESS##*:}"
+      pkill -F "$run/qemu.pid" 2>/dev/null || true
+      rm -rf "$run"
+    # The secure world needs full emulation (TCG), even on arm64 hosts
+    warn-timeout: 10m
+    kill-timeout: 30m
+    systems:
+      - ubuntu-26.04-arm64:
+          # Set in the rootfs part of bincraft.yaml
+          password: spread
+          # Two VMs with QEMU_SMP=2 fill a 4-core runner
+          workers: 2
+
+prepare: |
+  # The OP-TEE driver is a module, which udev normally loads at boot
+  modprobe optee
+  udevadm settle
+  test -c /dev/tee0
+  test -c /dev/teepriv0
+
+  # tee-supplicant.service fails if it starts before /dev/teepriv0 exists
+  systemctl restart tee-supplicant.service
+  systemctl is-active tee-supplicant.service
+
+debug-each: |
+  systemctl status --no-pager tee-supplicant.service || true
+  journalctl -b --no-pager -u tee-supplicant.service | tail -n 50 || true
+  dmesg | grep -iE 'tee|optee' | tail -n 50 || true
+
+suites:
+  tests/main/:
+    summary: fde_key_handler TA and fde hook tests

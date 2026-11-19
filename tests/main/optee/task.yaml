@@ -1,0 +1,11 @@
+summary: OP-TEE, tee-supplicant and the fde_key_handler TA are available
+
+execute: |
+  test -c /dev/tee0
+  test -c /dev/teepriv0
+  systemctl is-active tee-supplicant.service
+  test -f "/usr/lib/optee_armtz/${TA_UUID}.ta"
+
+  # Opening a session makes tee-supplicant load the TA from the filesystem.
+  # The version is FDE_TA_VERSION_V1 from fde_key_handler_ta_type.h.
+  fde-key-manager --get-ta-version | MATCH '^TA version: 0x10001$'
