@@ -1,0 +1,219 @@
+---
+name: optee-uc-fde-test-binaries
+version: 0.1
+base: ubuntu@26.04
+license: GPL-3.0-only
+summary: optee-uc-fde test binaries
+description: |
+  A single sentence that says what the source is, concisely and memorably.
+
+platforms:
+  arm64:
+    build-on:
+      - amd64
+      - arm64
+
+package-repositories:
+  - type: apt
+    architectures: [arm64]
+    formats:
+      - deb
+      - deb-src
+    components:
+      - main
+      - universe
+    suites:
+      - resolute
+      - resolute-updates
+    key-id: F6ECB3762474EDA9D21B7022871920D1991BC93C
+    url: http://archive.ubuntu.com/ubuntu
+
+parts:
+  fde-key-handler:
+    after: [optee]
+    plugin: nil
+    source: ta
+    source-type: local
+    build-environment:
+      - TA: "fd1b2a86-3668-11eb-adc1-0242ac120002.ta"
+      - TA_DEV_KIT_DIR: "${CRAFT_STAGE}/optee/export-ta_arm64"
+      - LDFLAGS: "--no-warn-rwx-segments --no-warn-execstack"
+      - on arm64:
+          - CROSS_COMPILE: ""
+      - else:
+          - CROSS_COMPILE: "${CRAFT_ARCH_TRIPLET}-"
+    override-build: |
+      env -u CFLAGS -u CPPFLAGS \
+        make O="${CRAFT_PART_BUILD}" -j"${CRAFT_PARALLEL_BUILD_COUNT}"
+      install -Dm0755 "${CRAFT_PART_BUILD}/ta/fde_key_handler/${TA}" \
+        -t "${CRAFT_PART_INSTALL}"/usr/lib/optee_armtz
+    prime: [-*]
+  fde-key-handler-include:
+    plugin: dump
+    source: ta/fde_key_handler/include
+    organize:
+      "*": include/
+    prime: [-*]
+  fde-key-manager:
+    after:
+      - fde-key-handler-include
+      - optee
+    plugin: nil
+    source: host/fde_key_manager
+    source-type: local
+    build-packages:
+      - libjson-c-dev:${CRAFT_ARCH_BUILD_FOR}
+      - optee-client-dev:${CRAFT_ARCH_BUILD_FOR}
+      - on arm64: []
+      - else: [libc6-dev-arm64-cross]
+    build-environment:
+      - OPTEE_CLIENT_EXPORT: "${CRAFT_STAGE}"
+      - on arm64:
+          - CROSS_COMPILE: ""
+      - else:
+          - CROSS_COMPILE: "${CRAFT_ARCH_TRIPLET}-"
+    override-build: |
+      env -u CFLAGS -u CPPFLAGS -u LDFLAGS \
+        make -R O="${CRAFT_PART_BUILD}" -j"${CRAFT_PARALLEL_BUILD_COUNT}" all
+      install -Dm0755 -t "${CRAFT_PART_INSTALL}"/usr/bin \
+        fde_key_manager/fde-key-manager \
+        fde_key_manager/fde-setup \
+        fde_key_manager/fde-reveal-key
+    prime: [-*]
+  u-boot:
+    plugin: nil
+    build-packages:
+      - bison
+      - build-essential
+      - flex
+      - libgnutls28-dev
+      - libssl-dev
+      - pkgconf
+      - python3
+      - uuid-dev
+      - on arm64: [gcc]
+      - else: ["gcc-${CRAFT_ARCH_TRIPLET}"]
+    build-environment:
+      - ARCH: "arm"
+      - BOOTCMD: >-
+          setenv bootargs \"root=/dev/vda rootfstype=squashfs ro rootwait\";
+          setenv kernel_addr_r 0x44000000;
+          load virtio 0 \${kernel_addr_r} boot/vmlinuz;
+          bootefi \${kernel_addr_r} \${fdtcontroladdr};
+      - on arm64:
+          - CROSS_COMPILE: ""
+      - else:
+          - CROSS_COMPILE: "${CRAFT_ARCH_TRIPLET}-"
+    override-pull: |
+      apt-get source u-boot
+      mv u-boot-*/* .
+      rm u-boot_*.orig.tar.* \
+        u-boot_*.debian.tar.* \
+        u-boot_*.dsc
+    override-build: |
+      make qemu_arm64_defconfig
+      # Make room for the large kernel and boot without initrd
+      ./scripts/config --enable ZSTD --set-str CONFIG_BOOTCOMMAND "${BOOTCMD}"
+      make olddefconfig
+      env -u CFLAGS -u CPPFLAGS -u LDFLAGS \
+        make -j"${CRAFT_PARALLEL_BUILD_COUNT}"
+      install -Dm0644 u-boot.bin -t "${CRAFT_PART_INSTALL}"
+    stage: [u-boot.bin]
+    prime: [-*]
+  optee:
+    plugin: nil
+    build-packages:
+      - build-essential
+      - device-tree-compiler
+      - gcc-arm-linux-gnueabihf
+      - python3-cryptography
+      - python3-pyelftools
+      - on arm64: [gcc]
+      - else: ["gcc-${CRAFT_ARCH_TRIPLET}"]
+    build-environment:
+      - LDFLAGS: "--no-warn-rwx-segments --no-warn-execstack"
+    override-pull: |
+      apt-get source optee-os:${CRAFT_ARCH_BUILD_FOR}
+      mv optee-os-*/* .
+      rm optee-os_*.orig.tar.*\
+        optee-os_*.debian.tar.* \
+        optee-os_*.dsc
+    override-build: |
+      env -u CFLAGS -u CPPFLAGS \
+        make -j"${CRAFT_PARALLEL_BUILD_COUNT}" \
+          CFG_ARM64_core="y" \
+          PLATFORM="vexpress-qemu_armv8a"
+      install -dm0755 "${CRAFT_PART_INSTALL}"/optee
+      cp -r out/arm-plat-vexpress/* "${CRAFT_PART_INSTALL}"/optee
+    prime: [-*]
+  arm-trusted-firmware:
+    after:
+      - optee
+      - u-boot
+    plugin: nil
+    build-packages:
+      - build-essential
+      - libssl-dev
+      - on arm64: [gcc]
+      - else: ["gcc-${CRAFT_ARCH_TRIPLET}"]
+    build-environment:
+      - on arm64:
+          - CROSS_COMPILE: ""
+      - else:
+          - CROSS_COMPILE: "${CRAFT_ARCH_TRIPLET}-"
+    override-pull: |
+      apt-get source arm-trusted-firmware:${CRAFT_ARCH_BUILD_FOR}
+      mv arm-trusted-firmware-*/* .
+      rm arm-trusted-firmware_*.orig.tar.*\
+        arm-trusted-firmware_*.debian.tar.* \
+        arm-trusted-firmware_*.dsc
+    override-build: |
+      env -u CFLAGS -u CPPFLAGS -u LDFLAGS \
+        make -j"${CRAFT_PARALLEL_BUILD_COUNT}" \
+          PLAT=qemu \
+          SPD=opteed \
+          DEBUG=1 \
+          BL32="${CRAFT_STAGE}/optee/core/tee-header_v2.bin" \
+          BL32_EXTRA1="${CRAFT_STAGE}/optee/core/tee-pager_v2.bin" \
+          BL32_EXTRA2="${CRAFT_STAGE}/optee/core/tee-pageable_v2.bin" \
+          BL33="${CRAFT_STAGE}/u-boot.bin" \
+          all fip
+      install -Dm0644 build/qemu/debug/qemu_fw.bios -t "${CRAFT_PART_INSTALL}"
+    prime: [qemu_fw.bios]
+  rootfs:
+    after:
+      - fde-key-handler
+      - fde-key-manager
+    plugin: nil
+    source: tests/rootfs
+    source-type: local
+    build-packages:
+      - arch-test
+      - mmdebstrap
+      - squashfs-tools-ng
+    build-environment:
+      - BIN: "${CRAFT_STAGE}/usr/bin"
+      - KEYRING: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+      - MIRROR: http://archive.ubuntu.com/ubuntu
+      - TA: usr/lib/optee_armtz/fd1b2a86-3668-11eb-adc1-0242ac120002.ta
+    override-build: |
+      set -euo pipefail
+      mmdebstrap \
+        --variant=important \
+        --format=tar \
+        --architectures=arm64 \
+        --include=linux-image-virtual,tee-supplicant,libjson-c5 \
+        --include=openssh-server,jq \
+        --customize-hook='echo root:spread | chroot "$1" chpasswd' \
+        --customize-hook="sync-in ${CRAFT_PART_BUILD} /" \
+        --customize-hook='mkdir -p "$1/var/lib/systemd/linger"' \
+        --customize-hook='mkdir -p "$1/var/lib/optee-client"' \
+        --customize-hook='mkdir -p "$1/usr/lib/optee_armtz"' \
+        --customize-hook="upload ${CRAFT_STAGE}/${TA} /${TA}" \
+        --customize-hook="copy-in ${BIN}/fde-key-manager /usr/bin" \
+        --customize-hook="copy-in ${BIN}/fde-reveal-key /usr/bin" \
+        --customize-hook="copy-in ${BIN}/fde-setup /usr/bin" \
+        resolute - \
+        "deb [signed-by=${KEYRING}] ${MIRROR} resolute main universe" \
+        "deb [signed-by=${KEYRING}] ${MIRROR} resolute-updates main universe" \
+        | tar2sqfs --force --compressor zstd "${CRAFT_PART_INSTALL}"/rootfs.img

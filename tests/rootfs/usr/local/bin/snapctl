@@ -1,0 +1,8 @@
+#!/bin/sh
+# Test stand-in for snapctl. fde-setup runs it with popen(), so this makes
+# fde-setup read the request from its stdin and write the result to its
+# stdout, as it does in an initrd.
+case "$1" in
+  fde-setup-request|fde-setup-result) exec cat ;;
+  *) echo "snapctl: unsupported command: $*" >&2; exit 1 ;;
+esac

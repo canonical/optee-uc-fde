@@ -10,3 +10,7 @@ snap/.snapcraft/
 *.snap
 .project
 /scripts/op-tee-emulation
+/.spread-qemu
+/.spread-reuse.*.yaml
+/*-generated.yaml
+/*tar.*

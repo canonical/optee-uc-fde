@@ -1,0 +1,65 @@
+---
+name: Test
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  spread:
+    name: spread (QEMU, OP-TEE)
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 150
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up LXD
+        uses: canonical/setup-lxd@v1
+      - name: Install bincraft
+        run: |
+          sudo snap install bincraft --classic --channel=latest/beta
+      - name: Install QEMU
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-arm
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+      - name: Install spread
+        # The spread snap's confinement doesn't allow the QEMU backend in
+        # spread.yaml to run
+        run: |
+          go install github.com/canonical/spread/cmd/spread@latest
+      - name: Build test binaries
+        run: |
+          bincraft --verbosity=debug pack
+          mkdir -p .spread-qemu/artifacts
+          tar -xJf optee-uc-fde-test-binaries_*_arm64.tar.xz \
+            -C .spread-qemu/artifacts
+      - name: Run spread
+        run: |
+          "$(go env GOPATH)"/bin/spread -v qemu-optee:
+      - name: Upload logs
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs
+          path: |
+            .spread-qemu/logs/
+            ~/.local/state/bincraft/log/
+          include-hidden-files: true
+          if-no-files-found: ignore

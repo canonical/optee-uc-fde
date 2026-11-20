@@ -1,0 +1,42 @@
+summary: Keys sealed with fde-setup are revealed by fde-reveal-key
+
+execute: |
+  # Seal a base64-encoded key, and print the JSON result
+  seal_key() {
+    jq -n --arg key "$1" '{"op": "initial-setup", "key": $key, "key-name": "spread-test"}' | fde-setup
+  }
+
+  # Reveal a key from its sealed key and handle, and print it
+  reveal_key() {
+    jq -n --arg sealed "$1" --arg handle "$2" '{"op": "reveal", "sealed-key": $sealed, "handle": $handle}' |
+      fde-reveal-key | jq -er .key
+  }
+
+  echo '{"op": "features"}' | fde-setup | jq -e '.features == []'
+
+  key=$(head -c 64 /dev/urandom | base64 -w0)
+  sealed=$(seal_key "$key")
+  sealed_key=$(echo "$sealed" | jq -er '."sealed-key"')
+  handle=$(echo "$sealed" | jq -er .handle)
+  test "$sealed_key" != "$key"
+
+  test "$(reveal_key "$sealed_key" "$handle")" = "$key"
+
+  # Every seal operation uses a new random handle
+  test "$(seal_key "$key" | jq -er .handle)" != "$handle"
+
+  # Flip the last byte of the handle (part of the authentication tag)
+  echo "$handle" | base64 -d > handle.bin
+  offset=$(( $(stat -c %s handle.bin) - 1 ))
+  byte=$(od -An -tu1 -j "$offset" -N 1 handle.bin | tr -d ' ')
+  printf '%b' "\\$(printf '%03o' $(( byte ^ 0xff )))" |
+    dd of=handle.bin bs=1 seek="$offset" count=1 conv=notrunc status=none
+  bad_handle=$(base64 -w0 handle.bin)
+
+  if reveal_key "$sealed_key" "$bad_handle"; then
+    echo "fde-reveal-key accepted a modified handle"
+    exit 1
+  fi
+
+restore: |
+  rm -f handle.bin

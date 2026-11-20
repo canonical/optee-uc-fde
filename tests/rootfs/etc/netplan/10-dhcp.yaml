@@ -1,0 +1,10 @@
+network:
+  version: 2
+  ethernets:
+    wired:
+      match:
+        name: en*
+      dhcp4: true
+      # Keep the address until the end of shutdown, so SSH connections are
+      # closed cleanly before a reboot
+      critical: true

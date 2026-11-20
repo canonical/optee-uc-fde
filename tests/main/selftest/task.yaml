@@ -1,0 +1,11 @@
+summary: TA encrypt/decrypt self test and random number generation
+
+execute: |
+  # The exit status can't be relied on, as TEE error codes get truncated
+  output=$(fde-key-manager --encrypt-decrypt-selftest 2>&1)
+  echo "$output" | NOMATCH 'Failed'
+
+  first=$(fde-key-manager --generate-random 32)
+  second=$(fde-key-manager --generate-random 32)
+  test "$(echo "$first" | base64 -d | wc -c)" -eq 32
+  test "$first" != "$second"

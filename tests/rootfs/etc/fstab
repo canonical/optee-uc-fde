@@ -1,0 +1,5 @@
+# Data disk created by Spread's allocate script, which holds the project and
+# survives reboots. SSH waits for it so Spread can't connect before it's ready.
+LABEL=spread-data /srv ext4 defaults,nofail,x-systemd.device-timeout=5min,x-systemd.before=ssh.socket,x-systemd.before=ssh.service 0 0
+# OP-TEE secure storage, used by tee-supplicant, on the read-only root
+tmpfs /var/lib/optee-client tmpfs mode=0700 0 0
