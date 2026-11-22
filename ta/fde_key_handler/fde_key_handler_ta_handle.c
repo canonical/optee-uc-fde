@@ -23,21 +23,25 @@
 #define KEY_HANDLE_VERSION 'U'
 
 /*
- * The GP TEE Internal Core API changed the type of the length parameters of
- * TEE_AEEncryptFinal()/TEE_AEDecryptFinal() (destLen, tagLen) from uint32_t to
- * size_t. Select a matching local length type so the TA builds against any
- * supported OP-TEE version:
- *   - OP-TEE <= 3.20 expects uint32_t.
- *   - OP-TEE >= 3.21 uses size_t by default; compatibility mode selects the
+ * The GP TEE Internal Core API 1.3.1 changed the type of all buffer length
+ * parameters (e.g. TEE_AEEncryptFinal() destLen/tagLen, TEE_MACComputeFinal()
+ * macLen, TEE_DigestDoFinal() hashLen, TEE_AsymmetricSignDigest()
+ * signatureLen, TEE_GetObjectBufferAttribute() size,
+ * TEE_BigIntConvertToOctetString() bufferLen) and of TEE_Param memref.size
+ * from uint32_t to size_t. Select a matching local length type so the TA
+ * builds against any supported OP-TEE version:
+ *   - OP-TEE 3.x (Core API 1.1) expects uint32_t.
+ *   - OP-TEE 4.x uses size_t by default; compatibility mode selects the
  *     legacy uint32_t (__GP11) variant.
  * Select size_t only when Core API 1.3.1 or newer is exposed without compat.
+ * Use tee_len_t for every variable whose address is passed to the GP API.
  */
 #if defined(TEE_CORE_API_VERSION) && TEE_CORE_API_VERSION >= 0x01030100 && \
     defined(__OPTEE_CORE_API_COMPAT_1_1) && \
     !__OPTEE_CORE_API_COMPAT_1_1
-typedef size_t tee_ae_len_t;
+typedef size_t tee_len_t;
 #else
-typedef uint32_t tee_ae_len_t;
+typedef uint32_t tee_len_t;
 #endif
 
 // Trusted Key Handle
@@ -106,8 +110,8 @@ static TEE_Result do_key_encrypt( TEE_OperationHandle crypto_op,
                                   struct key_handle *handle) {
 
     TEE_Result res = TEE_ERROR_GENERIC;
-    tee_ae_len_t tag_len = TAG_SIZE;
-    tee_ae_len_t enc_key_len = *enc_key_sz;
+    tee_len_t tag_len = TAG_SIZE;
+    tee_len_t enc_key_len = *enc_key_sz;
 
     res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
     if (res) {
@@ -135,7 +139,7 @@ static TEE_Result do_key_decrypt( TEE_OperationHandle crypto_op,
 
     TEE_Result res = TEE_ERROR_GENERIC;
     uint8_t tag[TAG_SIZE] = { 0 };
-    tee_ae_len_t key_len = *key_sz;
+    tee_len_t key_len = *key_sz;
 
     res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
     if (res) {
@@ -373,7 +377,7 @@ static TEE_Result hkdf_sha256(const uint8_t *ikm,  size_t ikm_len,
     /* Fixed zero salt for extract step */
     static const uint8_t zero_salt[32] = { 0 };
     uint8_t  prk[32];          /* pseudorandom key from extract step         */
-    size_t prk_len = sizeof(prk);
+    tee_len_t prk_len = sizeof(prk);
 
     TEE_ObjectHandle expand_key = TEE_HANDLE_NULL;
     TEE_Attribute    prk_attr;
@@ -440,7 +444,7 @@ static TEE_Result hkdf_sha256(const uint8_t *ikm,  size_t ikm_len,
     }
 
     while (produced < out_len) {
-        size_t t_len = sizeof(t_prev);
+        tee_len_t t_len = sizeof(t_prev);
         size_t copy;
 
         res = TEE_AllocateOperation(&op, TEE_ALG_HMAC_SHA256,
@@ -716,7 +720,7 @@ static TEE_Result derive_rsa_keypair(session_ctx_t *ctx,
     uint8_t *n_buf = NULL, *e_buf  = NULL, *d_buf   = NULL;
     uint8_t *p_buf = NULL, *q_buf  = NULL;
     uint8_t *dp_buf = NULL, *dq_buf = NULL, *qInv_buf = NULL;
-    size_t n_len, e_len, d_len, p_len, q_len, dp_len, dq_len, qInv_len;
+    tee_len_t n_len, e_len, d_len, p_len, q_len, dp_len, dq_len, qInv_len;
 
     TEE_Attribute attrs[8];
 
@@ -1055,16 +1059,17 @@ static size_t der_tlv(uint8_t *dst, uint8_t tag, const uint8_t *val, size_t vlen
  * Builds a PKCS#1 RSAPublicKey DER blob (modulus + public exponent).
  */
 static TEE_Result export_rsa_pubkey_der(TEE_ObjectHandle kp,
-                                        void *buf, size_t *buf_len) {
+                                        void *buf, tee_len_t *buf_len) {
     TEE_ObjectInfo info;
     uint8_t *mod = NULL;      /* raw modulus                                */
     uint8_t *mod_int = NULL;  /* modulus as DER INTEGER value               */
     uint8_t *tmp = NULL;      /* concatenated INTEGER TLVs                  */
     uint8_t  exp_raw[8];
     uint8_t  exp_int[sizeof(exp_raw) + 1];
-    size_t   exp_raw_len = sizeof(exp_raw);
+    tee_len_t exp_raw_len = sizeof(exp_raw);
     size_t   exp_int_len;
-    size_t   mod_len, mod_int_len;
+    tee_len_t mod_len;
+    size_t   mod_int_len;
     size_t   off = 0;
     size_t   needed;
     TEE_Result res;
@@ -1144,13 +1149,13 @@ out:
  */
 static TEE_Result export_ec_pubkey_der(TEE_ObjectHandle kp,
                                        uint32_t key_bits,
-                                       void *buf, size_t *buf_len) {
+                                       void *buf, tee_len_t *buf_len) {
     size_t coord = key_bits / 8;
     size_t needed = 1 + 2 * coord;  /* 0x04 || X || Y */
     uint8_t *out = buf;
     /* large enough for a P-384 coordinate */
     uint8_t tmp[48];
-    size_t xlen = sizeof(tmp), ylen = sizeof(tmp);
+    tee_len_t xlen = sizeof(tmp), ylen = sizeof(tmp);
     TEE_Result res;
 
     if (coord > sizeof(tmp))
@@ -1185,7 +1190,7 @@ static TEE_Result export_ec_pubkey_der(TEE_ObjectHandle kp,
 }
 
 static TEE_Result get_pubkey_internal(session_ctx_t *ctx,
-                                          void **buf_ptr, size_t *buf_len) {
+                                          void **buf_ptr, tee_len_t *buf_len) {
     if (!ctx->key_ready)
         return TEE_ERROR_BAD_STATE;
 
@@ -1288,11 +1293,11 @@ TEE_Result cmd_asymmetric_sign(session_ctx_t *ctx,
     const void *data     = params[0].memref.buffer;
     size_t      data_len = params[0].memref.size;
     void       *sig      = params[1].memref.buffer;
-    size_t    sig_len  = (uint32_t)params[1].memref.size;
+    tee_len_t   sig_len  = params[1].memref.size;
 
     /* Hash the message first */
     uint8_t  digest[32];
-    size_t digest_len = sizeof(digest);
+    tee_len_t digest_len = sizeof(digest);
     uint32_t sign_alg;
     uint32_t op_key_bits;
     TEE_ObjectInfo oi;
@@ -1372,7 +1377,7 @@ TEE_Result cmd_asymmetric_decrypt(session_ctx_t *ctx,
     TEE_ObjectInfo oi;
     TEE_OperationHandle op;
     TEE_Result res;
-    size_t out_len;
+    tee_len_t out_len;
 
     if (param_types != exp)
         return TEE_ERROR_BAD_PARAMETERS;
@@ -1403,7 +1408,7 @@ TEE_Result cmd_asymmetric_decrypt(session_ctx_t *ctx,
         return res;
     }
 
-    out_len = (uint32_t)params[1].memref.size;
+    out_len = params[1].memref.size;
     res = TEE_AsymmetricDecrypt(op, NULL, 0,
                                 params[0].memref.buffer, params[0].memref.size,
                                 params[1].memref.buffer, &out_len);
