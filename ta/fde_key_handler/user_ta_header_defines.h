@@ -14,8 +14,14 @@
                                      TA_FLAG_MULTI_SESSION | \
                                      TA_FLAG_DEVICE_ENUM | \
                                      TA_FLAG_INSTANCE_KEEP_ALIVE)
-#define TA_STACK_SIZE               (4 * 1024)
-#define TA_DATA_SIZE                (32 * 1024)
+/*
+ * RSA key derivation dominates the memory budget: each primality test on a
+ * half-key-size candidate drives a modular exponentiation whose window
+ * precompute alone can take ~16 KiB of heap for RSA-4096, on top of ~10 KiB
+ * of BigInts/export buffers and the transient keypair object.
+ */
+#define TA_STACK_SIZE               (16 * 1024)
+#define TA_DATA_SIZE                (128 * 1024)
 
 #define TA_CURRENT_TA_EXT_PROPERTIES \
     { "gp.ta.description", USER_TA_PROP_TYPE_STRING, \
