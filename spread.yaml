@@ -8,7 +8,7 @@ path: /srv/optee-uc-fde
 # The tests run against the binaries installed in the root filesystem, so only
 # the test scripts need to be sent
 include:
-  - tests/
+  - tests/spread
 
 environment:
   TA_UUID: fd1b2a86-3668-11eb-adc1-0242ac120002
@@ -170,5 +170,5 @@ debug-each: |
   dmesg | grep -iE 'tee|optee' | tail -n 50 || true
 
 suites:
-  tests/main/:
+  tests/spread/main/:
     summary: fde_key_handler TA and fde hook tests
