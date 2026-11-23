@@ -17,9 +17,9 @@
 #include "fde_key_handler_ta_type.h"
 #include "fde_key_handler_ta_handle.h"
 
-#define IV_SIZE         16
-#define NONCE_SIZE      32
-#define TAG_SIZE        16
+#define IV_SIZE 16
+#define NONCE_SIZE 32
+#define TAG_SIZE 16
 #define KEY_HANDLE_VERSION 'U'
 
 /*
@@ -33,8 +33,7 @@
  * Select size_t only when Core API 1.3.1 or newer is exposed without compat.
  */
 #if defined(TEE_CORE_API_VERSION) && TEE_CORE_API_VERSION >= 0x01030100 && \
-    defined(__OPTEE_CORE_API_COMPAT_1_1) && \
-    !__OPTEE_CORE_API_COMPAT_1_1
+	defined(__OPTEE_CORE_API_COMPAT_1_1) && !__OPTEE_CORE_API_COMPAT_1_1
 typedef size_t tee_ae_len_t;
 #else
 typedef uint32_t tee_ae_len_t;
@@ -42,10 +41,10 @@ typedef uint32_t tee_ae_len_t;
 
 // Trusted Key Handle
 struct key_handle {
-    uint8_t version; // reserved to recognise the version
-    uint8_t iv[IV_SIZE];
-    uint8_t nonce[NONCE_SIZE];
-    uint8_t tag[TAG_SIZE];
+	uint8_t version; // reserved to recognise the version
+	uint8_t iv[IV_SIZE];
+	uint8_t nonce[NONCE_SIZE];
+	uint8_t tag[TAG_SIZE];
 };
 
 /**
@@ -56,287 +55,300 @@ struct key_handle {
  *  handle: buffer with handle
  *  handle_size: size handle buffer
  */
-static TEE_Result derive_ta_unique_key(uint8_t *key,
-                                       uint16_t key_size,
-                                       uint8_t *handle,
-                                       uint32_t handle_size) {
+static TEE_Result derive_ta_unique_key(uint8_t *key, uint16_t key_size,
+				       uint8_t *handle, uint32_t handle_size)
+{
+	TEE_TASessionHandle sess = TEE_HANDLE_NULL;
+	TEE_Param params[TEE_NUM_PARAMS] = {};
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint32_t ret_orig = 0;
+	uint32_t param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
+					       TEE_PARAM_TYPE_MEMREF_OUTPUT,
+					       TEE_PARAM_TYPE_NONE,
+					       TEE_PARAM_TYPE_NONE);
 
-  TEE_TASessionHandle sess = TEE_HANDLE_NULL;
-  TEE_Param params[TEE_NUM_PARAMS] = { };
-  TEE_Result res = TEE_ERROR_GENERIC;
-  uint32_t ret_orig = 0;
-  uint32_t param_types = TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
-                                         TEE_PARAM_TYPE_MEMREF_OUTPUT,
-                                         TEE_PARAM_TYPE_NONE,
-                                         TEE_PARAM_TYPE_NONE);
+	res = TEE_OpenTASession(&(const TEE_UUID)PTA_SYSTEM_UUID,
+				TEE_TIMEOUT_INFINITE, 0, NULL, &sess,
+				&ret_orig);
+	if (res) {
+		return res;
+	}
 
-  res = TEE_OpenTASession(&(const TEE_UUID)PTA_SYSTEM_UUID,
-                          TEE_TIMEOUT_INFINITE,
-                          0,
-                          NULL,
-                          &sess,
-                          &ret_orig);
-  if (res) {
-    return res;
-  }
+	if (handle && handle_size) {
+		params[0].memref.buffer = handle;
+		params[0].memref.size = handle_size;
+	}
 
-  if (handle && handle_size) {
-    params[0].memref.buffer = handle;
-    params[0].memref.size = handle_size;
-  }
+	params[1].memref.buffer = key;
+	params[1].memref.size = key_size;
 
-  params[1].memref.buffer = key;
-  params[1].memref.size = key_size;
+	res = TEE_InvokeTACommand(sess, TEE_TIMEOUT_INFINITE,
+				  PTA_SYSTEM_DERIVE_TA_UNIQUE_KEY, param_types,
+				  params, &ret_orig);
 
-  res = TEE_InvokeTACommand(sess,
-                            TEE_TIMEOUT_INFINITE,
-                            PTA_SYSTEM_DERIVE_TA_UNIQUE_KEY,
-                            param_types,
-                            params,
-                            &ret_orig);
+	TEE_CloseTASession(sess);
 
-  TEE_CloseTASession(sess);
-
-  return res;
+	return res;
 }
 
-static TEE_Result do_key_encrypt( TEE_OperationHandle crypto_op,
-                                  uint8_t *key, size_t key_sz,
-                                  uint8_t *enc_key, size_t *enc_key_sz,
-                                  struct key_handle *handle) {
+static TEE_Result do_key_encrypt(TEE_OperationHandle crypto_op, uint8_t *key,
+				 size_t key_sz, uint8_t *enc_key,
+				 size_t *enc_key_sz, struct key_handle *handle)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	tee_ae_len_t tag_len = TAG_SIZE;
+	tee_ae_len_t enc_key_len = *enc_key_sz;
 
-    TEE_Result res = TEE_ERROR_GENERIC;
-    tee_ae_len_t tag_len = TAG_SIZE;
-    tee_ae_len_t enc_key_len = *enc_key_sz;
+	res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
+	if (res) {
+		EMSG("fde_key_handler: TA init failed: %#" PRIx32 "\n", res);
+		return res;
+	}
 
-    res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
-    if (res) {
-      EMSG("fde_key_handler: TA init failed: %#"PRIx32"\n", res);
-      return res;
-    }
+	res = TEE_AEEncryptFinal(crypto_op, key, key_sz, enc_key, &enc_key_len,
+				 handle->tag, &tag_len);
+	*enc_key_sz = enc_key_len;
 
-    res = TEE_AEEncryptFinal(crypto_op, key, key_sz, enc_key,
-                            &enc_key_len, handle->tag, &tag_len);
-    *enc_key_sz = enc_key_len;
+	if (res || tag_len != TAG_SIZE || *enc_key_sz != key_sz) {
+		EMSG("fde_key_handler: key encrypt failed: [%" PRIu32
+		     ", %" PRIu32 "], [%" PRIu64 ", %" PRIu64 "], %#" PRIx32
+		     "\n",
+		     (uint32_t)tag_len, (uint32_t)TAG_SIZE,
+		     (uint64_t)*enc_key_sz, (uint64_t)key_sz, res);
+		res = res ? res : TEE_ERROR_SECURITY;
+	}
 
-    if (res || tag_len != TAG_SIZE || *enc_key_sz != key_sz) {
-      EMSG("fde_key_handler: key encrypt failed: [%"PRIu32", %"PRIu32"], [%"PRIu64", %"PRIu64"], %#"PRIx32"\n",
-            (uint32_t)tag_len, (uint32_t)TAG_SIZE, (uint64_t)*enc_key_sz, (uint64_t)key_sz, res);
-      res = res ? res: TEE_ERROR_SECURITY;
-    }
-
-    return res;
+	return res;
 }
 
-static TEE_Result do_key_decrypt( TEE_OperationHandle crypto_op,
-                                  uint8_t *enc_key, size_t enc_key_sz,
-                                  uint8_t *key, size_t *key_sz,
-                                  struct key_handle *handle) {
+static TEE_Result do_key_decrypt(TEE_OperationHandle crypto_op,
+				 uint8_t *enc_key, size_t enc_key_sz,
+				 uint8_t *key, size_t *key_sz,
+				 struct key_handle *handle)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	uint8_t tag[TAG_SIZE] = { 0 };
+	tee_ae_len_t key_len = *key_sz;
 
-    TEE_Result res = TEE_ERROR_GENERIC;
-    uint8_t tag[TAG_SIZE] = { 0 };
-    tee_ae_len_t key_len = *key_sz;
+	res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
+	if (res) {
+		EMSG("fde_key_handler: TA init failed: %#" PRIx32 "\n", res);
+		return res;
+	}
 
-    res = TEE_AEInit(crypto_op, handle->iv, IV_SIZE, TAG_SIZE * 8, 0, 0);
-    if (res) {
-      EMSG("fde_key_handler: TA init failed: %#"PRIx32"\n", res);
-      return res;
-    }
+	memcpy(tag, handle->tag, TAG_SIZE);
+	res = TEE_AEDecryptFinal(crypto_op, enc_key, enc_key_sz, key, &key_len,
+				 tag, TAG_SIZE);
+	*key_sz = key_len;
 
-    memcpy(tag, handle->tag, TAG_SIZE);
-    res = TEE_AEDecryptFinal(crypto_op, enc_key, enc_key_sz, key,
-           &key_len, tag, TAG_SIZE);
-    *key_sz = key_len;
+	if (res || enc_key_sz != *key_sz) {
+		EMSG("fde_key_handler: key decrypt failed: [%" PRIx64
+		     ", %" PRIx64 "], %#" PRIx32 "\n",
+		     (uint64_t)enc_key_sz, (uint64_t)*key_sz, res);
+		res = res ? res : TEE_ERROR_SECURITY;
+	}
 
-    if (res || enc_key_sz != *key_sz) {
-      EMSG("fde_key_handler: key decrypt failed: [%"PRIx64", %"PRIx64"], %#"PRIx32"\n",
-           (uint64_t)enc_key_sz, (uint64_t)*key_sz, res);
-      res = res ? res: TEE_ERROR_SECURITY;
-    }
-
-    return res;
+	return res;
 }
 
-static TEE_Result do_key_crypto( TEE_OperationMode mode,
-                                 uint8_t *in, size_t in_size,
-                                 uint8_t *out, size_t *out_size,
-                                 struct key_handle *handle) {
+static TEE_Result do_key_crypto(TEE_OperationMode mode, uint8_t *in,
+				size_t in_size, uint8_t *out, size_t *out_size,
+				struct key_handle *handle)
+{
+	TEE_Result res = TEE_ERROR_GENERIC;
+	TEE_OperationHandle crypto_op = TEE_HANDLE_NULL;
+	TEE_ObjectHandle hkey = TEE_HANDLE_NULL;
+	uint8_t huk_key[TA_DERIVED_KEY_MAX_SIZE] = {};
+	TEE_Attribute attr = {};
 
-    TEE_Result res = TEE_ERROR_GENERIC;
-    TEE_OperationHandle crypto_op = TEE_HANDLE_NULL;
-    TEE_ObjectHandle hkey = TEE_HANDLE_NULL;
-    uint8_t huk_key[TA_DERIVED_KEY_MAX_SIZE] = { };
-    TEE_Attribute attr = { };
+	res = TEE_AllocateOperation(&crypto_op, TEE_ALG_AES_GCM, mode,
+				    sizeof(huk_key) * 8);
+	if (res) {
+		return res;
+	}
 
-    res = TEE_AllocateOperation(&crypto_op, TEE_ALG_AES_GCM, mode,
-              sizeof(huk_key) * 8);
-    if (res)
-      return res;
+	res = derive_ta_unique_key(huk_key, sizeof(huk_key), handle->nonce,
+				   sizeof(handle->nonce));
+	if (res) {
+		EMSG("fde_key_handler: derive_unique_key failed: returned %#" PRIx32,
+		     res);
+		goto out_op;
+	}
 
-    res = derive_ta_unique_key(huk_key, sizeof(huk_key), handle->nonce, sizeof(handle->nonce));
-    if (res) {
-      EMSG("fde_key_handler: derive_unique_key failed: returned %#"PRIx32, res);
-      goto out_op;
-    }
+	res = TEE_AllocateTransientObject(TEE_TYPE_AES, sizeof(huk_key) * 8,
+					  &hkey);
+	if (res) {
+		goto out_op;
+	}
 
-    res = TEE_AllocateTransientObject(TEE_TYPE_AES, sizeof(huk_key) * 8,
-              &hkey);
-    if (res)
-      goto out_op;
+	attr.attributeID = TEE_ATTR_SECRET_VALUE;
+	attr.content.ref.buffer = huk_key;
+	attr.content.ref.length = sizeof(huk_key);
 
-    attr.attributeID = TEE_ATTR_SECRET_VALUE;
-    attr.content.ref.buffer = huk_key;
-    attr.content.ref.length = sizeof(huk_key);
+	res = TEE_PopulateTransientObject(hkey, &attr, 1);
+	if (res) {
+		EMSG("fde_key_handler: TEE_PopulateTransientObject failed: %#" PRIx32,
+		     res);
+		goto out_key;
+	}
 
-    res = TEE_PopulateTransientObject(hkey, &attr, 1);
-    if (res) {
-      EMSG("fde_key_handler: TEE_PopulateTransientObject failed: %#"PRIx32, res);
-      goto out_key;
-    }
+	res = TEE_SetOperationKey(crypto_op, hkey);
+	if (res) {
+		EMSG("fde_key_handler: TEE_SetOperationKey failed: %#" PRIx32,
+		     res);
+		goto out_key;
+	}
 
-    res = TEE_SetOperationKey(crypto_op, hkey);
-    if (res) {
-      EMSG("fde_key_handler: TEE_SetOperationKey failed: %#"PRIx32, res);
-      goto out_key;
-    }
+	if (mode == TEE_MODE_ENCRYPT) {
+		res = do_key_encrypt(crypto_op, in, in_size, out, out_size,
+				     handle);
+	} else if (mode == TEE_MODE_DECRYPT) {
+		res = do_key_decrypt(crypto_op, in, in_size, out, out_size,
+				     handle);
+	} else {
+		TEE_Panic(0);
+	}
 
-    if (mode == TEE_MODE_ENCRYPT) {
-      res = do_key_encrypt(crypto_op, in, in_size, out, out_size, handle);
-    } else if (mode == TEE_MODE_DECRYPT) {
-      res = do_key_decrypt(crypto_op, in, in_size, out, out_size, handle);
-    } else {
-      TEE_Panic(0);
-    }
-
-    out_key:
-      TEE_FreeTransientObject(hkey);
-    out_op:
-      TEE_FreeOperation(crypto_op);
-      memzero_explicit(huk_key, sizeof(huk_key));
-    return res;
+out_key:
+	TEE_FreeTransientObject(hkey);
+out_op:
+	TEE_FreeOperation(crypto_op);
+	memzero_explicit(huk_key, sizeof(huk_key));
+	return res;
 }
 
-TEE_Result cmd_symmetric_key_crypto( TEE_OperationMode mode,
-                       unsigned int paramTypes,
-                       TEE_Param params[TEE_NUM_PARAMS]) {
+TEE_Result cmd_symmetric_key_crypto(TEE_OperationMode mode,
+				    unsigned int paramTypes,
+				    TEE_Param params[TEE_NUM_PARAMS])
+{
+	TEE_Result res = TEE_SUCCESS;
+	uint8_t *in = NULL;
+	size_t in_size = 0;
+	uint8_t *out = NULL;
+	size_t out_size = 0;
+	struct key_handle *handle = NULL;
+	uint8_t *handle_buf = NULL;
+	uint32_t handle_buf_size = 0;
+	uint8_t *rng_buf = NULL;
 
-    TEE_Result res = TEE_SUCCESS;
-    uint8_t *in = NULL;
-    size_t in_size = 0;
-    uint8_t *out = NULL;
-    size_t out_size = 0;
-    struct key_handle * handle = NULL;
-    uint8_t *handle_buf = NULL;
-    uint32_t handle_buf_size = 0;
-    uint8_t *rng_buf = NULL;
+	DMSG("fde_key_handler: Handle key crypto");
 
-    DMSG("fde_key_handler: Handle key crypto");
+	if (mode == TEE_MODE_ENCRYPT) {
+		if (paramTypes != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
+						  TEE_PARAM_TYPE_MEMREF_OUTPUT,
+						  TEE_PARAM_TYPE_MEMREF_OUTPUT,
+						  TEE_PARAM_TYPE_NONE)) {
+			return TEE_ERROR_BAD_PARAMETERS;
+		}
+	} else if (mode == TEE_MODE_DECRYPT) {
+		if (paramTypes != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
+						  TEE_PARAM_TYPE_MEMREF_INPUT,
+						  TEE_PARAM_TYPE_MEMREF_OUTPUT,
+						  TEE_PARAM_TYPE_NONE)) {
+			return TEE_ERROR_BAD_PARAMETERS;
+		}
+	} else {
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
-    if (mode == TEE_MODE_ENCRYPT) {
-      if (paramTypes != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
-                                        TEE_PARAM_TYPE_MEMREF_OUTPUT,
-                                        TEE_PARAM_TYPE_MEMREF_OUTPUT,
-                                        TEE_PARAM_TYPE_NONE))
-        return TEE_ERROR_BAD_PARAMETERS;
-    } else if (mode == TEE_MODE_DECRYPT) {
-      if (paramTypes != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
-                                        TEE_PARAM_TYPE_MEMREF_INPUT,
-                                        TEE_PARAM_TYPE_MEMREF_OUTPUT,
-                                        TEE_PARAM_TYPE_NONE))
-        return TEE_ERROR_BAD_PARAMETERS;
-    } else {
-      return TEE_ERROR_BAD_PARAMETERS;
-    }
+	in = params[0].memref.buffer;
+	in_size = params[0].memref.size;
+	handle_buf = params[1].memref.buffer;
+	handle_buf_size = params[1].memref.size;
+	out = params[2].memref.buffer;
+	out_size = params[2].memref.size;
 
-    in = params[0].memref.buffer;
-    in_size = params[0].memref.size;
-    handle_buf = params[1].memref.buffer;
-    handle_buf_size = params[1].memref.size;
-    out = params[2].memref.buffer;
-    out_size = params[2].memref.size;
+	if ((!in && in_size) || in_size > MAX_BUF_SIZE) {
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+	if ((!out && out_size) || out_size > MAX_BUF_SIZE) {
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+	if ((!handle_buf && handle_buf_size) ||
+	    handle_buf_size != sizeof(struct key_handle)) {
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
-    if ((!in && in_size) || in_size > MAX_BUF_SIZE) {
-      return TEE_ERROR_BAD_PARAMETERS;
-    }
-    if ((!out && out_size) || out_size > MAX_BUF_SIZE) {
-      return TEE_ERROR_BAD_PARAMETERS;
-    }
-    if ((!handle_buf && handle_buf_size) || handle_buf_size != sizeof(struct key_handle)) {
-      return TEE_ERROR_BAD_PARAMETERS;
-    }
+	handle = (struct key_handle *)handle_buf;
+	// generate random iv and handle for encryption operation
+	if (mode == TEE_MODE_ENCRYPT) {
+		// on some plartforms we can't call TEE_GenerateRandom twice in
+		// single session, generate all randomness in one go.
+		rng_buf =
+			TEE_Malloc(IV_SIZE + NONCE_SIZE, TEE_MALLOC_FILL_ZERO);
+		if (!rng_buf) {
+			return TEE_ERROR_OUT_OF_MEMORY;
+		}
 
-    handle = (struct key_handle *)handle_buf;
-    // generate random iv and handle for encryption operation
-    if (mode == TEE_MODE_ENCRYPT) {
-      // on some plartforms we can't call TEE_GenerateRandom twice in
-      // single session, generate all randomness in one go.
-      rng_buf = TEE_Malloc(IV_SIZE + NONCE_SIZE, TEE_MALLOC_FILL_ZERO);
-      if (!rng_buf)
-        return TEE_ERROR_OUT_OF_MEMORY;
+		TEE_GenerateRandom(rng_buf, IV_SIZE + NONCE_SIZE);
+		memcpy(handle->iv, rng_buf, IV_SIZE);
+		memcpy(handle->nonce, rng_buf + IV_SIZE, NONCE_SIZE);
+		memzero_explicit(rng_buf, IV_SIZE + NONCE_SIZE);
+		TEE_Free(rng_buf);
+		handle->version = KEY_HANDLE_VERSION;
+	} else {
+		if (handle->version != KEY_HANDLE_VERSION) {
+			EMSG("fde_key_handler: bad handle version %#" PRIx8,
+			     handle->version);
+			return TEE_ERROR_BAD_PARAMETERS;
+		}
+	}
 
-      TEE_GenerateRandom(rng_buf, IV_SIZE + NONCE_SIZE);
-      memcpy(handle->iv, rng_buf, IV_SIZE);
-      memcpy(handle->nonce, rng_buf + IV_SIZE, NONCE_SIZE);
-      memzero_explicit(rng_buf, IV_SIZE + NONCE_SIZE);
-      TEE_Free(rng_buf);
-      handle->version = KEY_HANDLE_VERSION;
-    } else {
-      if (handle->version != KEY_HANDLE_VERSION) {
-        EMSG("fde_key_handler: bad handle version %#"PRIx8, handle->version);
-        return TEE_ERROR_BAD_PARAMETERS;
-      }
-    }
-
-    res = do_key_crypto(mode, in, in_size, out, &out_size, handle);
-    if (res == TEE_SUCCESS) {
-      if (out_size != in_size) {
-        EMSG("fde_key_handler: output size mismatch %"PRIu64" != %"PRIu64,
-             (uint64_t)out_size, (uint64_t)in_size);
-        return TEE_ERROR_SECURITY;
-      }
-      params[2].memref.size = out_size;
-      if (mode == TEE_MODE_ENCRYPT) {
-        params[1].memref.size = sizeof(struct key_handle);
-      }
-    }
-    return res;
+	res = do_key_crypto(mode, in, in_size, out, &out_size, handle);
+	if (res == TEE_SUCCESS) {
+		if (out_size != in_size) {
+			EMSG("fde_key_handler: output size mismatch %" PRIu64
+			     " != %" PRIu64,
+			     (uint64_t)out_size, (uint64_t)in_size);
+			return TEE_ERROR_SECURITY;
+		}
+		params[2].memref.size = out_size;
+		if (mode == TEE_MODE_ENCRYPT) {
+			params[1].memref.size = sizeof(struct key_handle);
+		}
+	}
+	return res;
 }
 
-TEE_Result generate_random( uint32_t types, TEE_Param params[TEE_NUM_PARAMS]) {
-    uint8_t *rng_buf = NULL;
+TEE_Result generate_random(uint32_t types, TEE_Param params[TEE_NUM_PARAMS])
+{
+	uint8_t *rng_buf = NULL;
 
-    DMSG("fde_key_handler: generate_random");
+	DMSG("fde_key_handler: generate_random");
 
-    if (types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT,
-                                 TEE_PARAM_TYPE_NONE,
-                                 TEE_PARAM_TYPE_NONE,
-                                 TEE_PARAM_TYPE_NONE))
-      return TEE_ERROR_BAD_PARAMETERS;
+	if (types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT,
+				     TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE,
+				     TEE_PARAM_TYPE_NONE)) {
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
-    if (!params[0].memref.buffer || !params[0].memref.size)
-      return TEE_ERROR_BAD_PARAMETERS;
+	if (!params[0].memref.buffer || !params[0].memref.size) {
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
-    rng_buf = TEE_Malloc(params[0].memref.size, TEE_MALLOC_FILL_ZERO);
-    if (!rng_buf)
-      return TEE_ERROR_OUT_OF_MEMORY;
+	rng_buf = TEE_Malloc(params[0].memref.size, TEE_MALLOC_FILL_ZERO);
+	if (!rng_buf) {
+		return TEE_ERROR_OUT_OF_MEMORY;
+	}
 
-    TEE_GenerateRandom(rng_buf, params[0].memref.size);
-    memcpy(params[0].memref.buffer, rng_buf, params[0].memref.size);
-    memzero_explicit(rng_buf, params[0].memref.size);
+	TEE_GenerateRandom(rng_buf, params[0].memref.size);
+	memcpy(params[0].memref.buffer, rng_buf, params[0].memref.size);
+	memzero_explicit(rng_buf, params[0].memref.size);
 
-    TEE_Free(rng_buf);
+	TEE_Free(rng_buf);
 
-    return TEE_SUCCESS;
+	return TEE_SUCCESS;
 }
 
-TEE_Result get_ta_version( uint32_t types, TEE_Param params[TEE_NUM_PARAMS]) {
-    DMSG("get_ta_version");
-    if (types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_VALUE_OUTPUT,
-                                 TEE_PARAM_TYPE_NONE,
-                                 TEE_PARAM_TYPE_NONE,
-                                 TEE_PARAM_TYPE_NONE))
-      return TEE_ERROR_BAD_PARAMETERS;
+TEE_Result get_ta_version(uint32_t types, TEE_Param params[TEE_NUM_PARAMS])
+{
+	DMSG("get_ta_version");
+	if (types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_VALUE_OUTPUT,
+				     TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE,
+				     TEE_PARAM_TYPE_NONE)) {
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
-    params[0].value.a = FDE_TA_VERSION_V1;
-    return TEE_SUCCESS;
+	params[0].value.a = FDE_TA_VERSION_V1;
+	return TEE_SUCCESS;
 }
