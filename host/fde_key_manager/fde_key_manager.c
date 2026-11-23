@@ -520,6 +520,12 @@ int encrypt_decrypt_selftest(void)
 		printf("Unsealed Key: %s\n", unsealed_key);
 	}
 
+	if (unsealed_key_buf_len != key_buf_len ||
+	    memcmp(unsealed_key_buf, key_buf, key_buf_len) != 0) {
+		ree_log(REE_ERROR, "Unsealed key doesn't match the key");
+		ret = EXIT_FAILURE;
+	}
+
 cleanup:
 	if (key_buf) {
 		explicit_bzero(key_buf, key_buf_len);
