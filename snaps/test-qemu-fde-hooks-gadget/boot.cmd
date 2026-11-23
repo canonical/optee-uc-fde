@@ -28,7 +28,22 @@ for pathprefix in ${fk_image_locations}; do
   setenv snapd_standard_params "panic=-1 systemd.gpt_auto=0 snapd.debug=1 systemd.journald.forward_to_console=1 console=ttyAMA0"
 
   env import -c ${kernel_addr_r} ${filesize} ${recovery_vars}
-  setenv bootargs "${bootargs} snapd_recovery_mode=${snapd_recovery_mode} snapd_recovery_system=${snapd_recovery_system} ${snapd_standard_params}"
+
+  if test "${snapd_recovery_mode}" = "run"; then
+    setenv snapd_recovery_mode_verified "run"
+  elif test "${snapd_recovery_mode}" = "install"; then
+    setenv snapd_recovery_mode_verified "install"
+  elif test "${snapd_recovery_mode}" = "recover"; then
+    setenv snapd_recovery_mode_verified "recover"
+  else
+    setenv snapd_recovery_mode_verified "install"
+  fi
+
+  if test "${snapd_recovery_system}" ~= "^[a-zA-Z0-9-_]*$"; then
+    setenv snapd_recovery_system_verified "${snapd_recovery_system}"
+  fi
+
+  setenv bootargs "${bootargs} snapd_recovery_mode=${snapd_recovery_mode_verified} snapd_recovery_system=${snapd_recovery_system_verified} ${snapd_standard_params}"
 
   if test "${snapd_recovery_mode}" = "run"; then
     setexpr kernel_bootpart ${distro_bootpart} + 1
