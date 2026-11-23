@@ -15,6 +15,30 @@ on:  # yamllint disable-line rule:truthy
     branches: [master]
 
 jobs:
+  lint:
+    name: lint (clang-format, clang-tidy)
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install linters
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang-format clang-tidy libjson-c-dev
+      - name: Check formatting
+        run: |
+          make check-format
+      - name: Run clang-tidy
+        # Also report clang-tidy's findings when the formatting check fails
+        if: ${{ !cancelled() }}
+        run: |
+          make tidy
+
   spread:
     name: spread (QEMU, OP-TEE)
     runs-on: ubuntu-26.04-arm
