@@ -1,0 +1,40 @@
+---
+# Disabled checks:
+#   bugprone-easily-swappable-parameters  Signatures are fixed by the GP and
+#                                         TEE Client APIs
+#   cert-env33-c                          popen() of snapctl is by design
+#   cert-err33-c                          Unchecked printf() family results
+#   clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+#                                         Asks for C11 Annex K functions,
+#                                         which glibc and OP-TEE don't provide
+#   concurrency-mt-unsafe                 The host tools are single-threaded
+#   misc-include-cleaner                  json-c and the TEE APIs are used
+#                                         through their umbrella headers
+#   readability-function-cognitive-complexity
+#   readability-identifier-length
+#   readability-magic-numbers             Sizes in the crypto code are clearer
+#                                         as literals
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  misc-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -cert-env33-c,
+  -cert-err33-c,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -concurrency-mt-unsafe,
+  -misc-include-cleaner,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-magic-numbers
+
+# Any warning fails "make tidy"
+WarningsAsErrors: '*'
+
+# Check this repository's headers, except the base64.h imported from mbedtls
+HeaderFilterRegex: '(/ta/fde_key_handler/.*|/host/fde_key_manager/[a-z_]+_ca)\.h$'
