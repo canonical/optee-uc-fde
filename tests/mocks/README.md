@@ -16,6 +16,7 @@ fake for any new function.
 `make tidy` uses the headers to run clang-tidy. `make mocks` builds the fakes
 into `out/mocks/libmock-optee-os.a` and `out/mocks/libmock-optee-client.a`,
 which need [cmocka](https://cmocka.org) 2.0 (`libcmocka-dev` in Ubuntu 26.04).
+`make unit-test` builds them as needed, see `tests/unit/README.md`.
 
 ## Fakes
 

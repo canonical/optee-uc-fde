@@ -58,11 +58,17 @@ ta:
 mocks:
 	$(q)$(MAKE) -C tests/mocks O=$(out-dir)
 
+# Unit tests, see tests/unit/README.md
+.PHONY: unit-test
+unit-test: mocks
+	$(q)$(MAKE) -C tests/unit O=$(out-dir)
+
 .PHONY: clean
 clean:
 	${q}if [ -d $(out-dir)/fde_key_manager ]; then $(MAKE) -C host/fde_key_manager O=$(out-dir) $@; fi
 	${q}if [ -d $(out-dir)/ta ]; then $(MAKE) -C ta O=$(out-dir) $@; fi
 	${q}if [ -d $(out-dir)/mocks ]; then $(MAKE) -C tests/mocks O=$(out-dir) $@; fi
+	${q}if [ -d $(out-dir)/unit-tests ]; then $(MAKE) -C tests/unit O=$(out-dir) $@; fi
 
 # Formatting and static analysis, see .clang-format and .clang-tidy.
 # base64.[ch] are imported from mbedtls and keep their upstream style.
@@ -73,7 +79,7 @@ TIDY_FLAGS ?=
 
 FORMAT_SRCS := $(filter-out %/base64.c %/base64.h, \
 		 $(wildcard host/*/*.[ch] ta/*/*.[ch] ta/*/include/*.h \
-			    tests/mocks/*/*.[ch]))
+			    tests/mocks/*/*.[ch] tests/unit/*/*.[ch]))
 
 # clang-tidy uses the mock OP-TEE headers in tests/mocks, so it needs neither
 # the OP-TEE SDKs nor a build. The host code also needs libjson-c-dev.
