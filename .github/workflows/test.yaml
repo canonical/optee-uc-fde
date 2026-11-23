@@ -53,10 +53,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential libcmocka-dev libjson-c-dev pkgconf
+            build-essential libcmocka-dev libjson-c-dev pkgconf python3
       - name: Run unit tests
+        id: unit-test
         run: |
-          make unit-test
+          set -o pipefail
+          make unit-test 2>&1 | tee unit-test.log
+      - name: Report unit test results
+        # Also report the results when the tests failed
+        if: ${{ !cancelled() && steps.unit-test.outcome != 'skipped' }}
+        run: |
+          python3 .github/scripts/unit-test-report.py unit-test.log
 
   spread:
     name: spread (QEMU, OP-TEE)

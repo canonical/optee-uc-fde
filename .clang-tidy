@@ -37,4 +37,4 @@ Checks: >
 WarningsAsErrors: '*'
 
 # Check this repository's headers, except the base64.h imported from mbedtls
-HeaderFilterRegex: '(/ta/fde_key_handler/.*|/host/fde_key_manager/[a-z_]+_ca)\.h$'
+HeaderFilterRegex: '(/ta/fde_key_handler/.*|/host/fde_key_manager/fde_[a-z_]+)\.h$'

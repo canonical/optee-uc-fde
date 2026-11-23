@@ -3,8 +3,8 @@
  * Copyright 2025, Canonical Ltd.
  */
 
-#ifndef FDE_KEY_MANAGER_H_
-#define FDE_KEY_MANAGER_H_
+#ifndef FDE_KEY_MANAGER_CA_H_
+#define FDE_KEY_MANAGER_CA_H_
 
 // helper wrapper around mbedtls_base64_encode function
 extern char *base64_encode(const unsigned char *in_buf, size_t in_buf_len);
@@ -29,4 +29,4 @@ extern TEEC_Result get_ta_version(uint32_t *version);
 #define REE_INFO 3
 #define REE_DEBUG 4
 extern void ree_log(int log_level, const char *format, ...);
-#endif // FDE_KEY_MANAGER_H_
+#endif // FDE_KEY_MANAGER_CA_H_

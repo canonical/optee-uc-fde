@@ -18,6 +18,11 @@ CFLAGS += -std=gnu11 -Wall -Wextra -g
 CFLAGS += $(shell $(PKG_CONFIG) --cflags cmocka)
 LDLIBS += $(shell $(PKG_CONFIG) --libs cmocka)
 
+# Fail tests on memory errors, leaks and undefined behaviour. cmocka only
+# checks the TA's TEE_Malloc() memory, these also check the host code.
+SANITIZE ?= -fsanitize=address,undefined -fno-sanitize-recover=all
+CFLAGS += $(SANITIZE)
+
 ta-cflags := -I$(root)/ta/fde_key_handler \
 	     -I$(root)/ta/fde_key_handler/include \
 	     -I$(root)/tests/mocks/optee-os
@@ -27,6 +32,9 @@ host-cflags = -I$(root)/host/fde_key_manager \
 	      -I$(root)/tests/mocks/optee-client \
 	      $(shell $(PKG_CONFIG) --cflags json-c)
 host-ldlibs = $(shell $(PKG_CONFIG) --libs json-c)
+# Linked into every host test, so host tests only fake the TEE Client API
+host-helpers := $(root)/host/fde_key_manager/base64.c \
+		$(root)/host/fde_key_manager/fde_key_manager_ca.c
 
 ta-tests := $(patsubst %.c,$(tests-dir)/%,$(wildcard ta/test_*.c))
 host-tests := $(patsubst %.c,$(tests-dir)/%,$(wildcard host/test_*.c))
@@ -52,18 +60,22 @@ else
 	exit $$failed
 endif
 
-# test_<name>.c tests <name>.c, linked with the mocks
+# test_<name>.c tests <name>.c, linked with the mocks. $^ lists each file
+# once, even when the tested file is also one of the host helpers. Tests are
+# rebuilt when a header shared by the tests in their directory changes.
 $(tests-dir)/ta/test_%: ta/test_%.c $(root)/ta/fde_key_handler/%.c \
-			$(mocks-dir)/libmock-optee-os.a
+			$(mocks-dir)/libmock-optee-os.a $(wildcard ta/*.h)
 	$(q)mkdir -p $(dir $@)
 	@echo '  CC      $<'
-	$(q)$(CC) $(CFLAGS) $(ta-cflags) -o $@ $^ $(LDLIBS)
+	$(q)$(CC) $(CFLAGS) $(ta-cflags) -o $@ $(filter-out %.h,$^) $(LDLIBS)
 
 $(tests-dir)/host/test_%: host/test_%.c $(root)/host/fde_key_manager/%.c \
-			  $(mocks-dir)/libmock-optee-client.a
+			  $(host-helpers) $(mocks-dir)/libmock-optee-client.a \
+			  $(wildcard host/*.h)
 	$(q)mkdir -p $(dir $@)
 	@echo '  CC      $<'
-	$(q)$(CC) $(CFLAGS) $(host-cflags) -o $@ $^ $(LDLIBS) $(host-ldlibs)
+	$(q)$(CC) $(CFLAGS) $(host-cflags) -o $@ $(filter-out %.h,$^) \
+		$(LDLIBS) $(host-ldlibs)
 
 .PHONY: clean
 clean:

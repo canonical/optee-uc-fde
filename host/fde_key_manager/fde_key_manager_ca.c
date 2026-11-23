@@ -35,7 +35,7 @@ char *base64_encode(const unsigned char *in_buf, size_t in_buf_len)
 	/* Probe for required output length */
 	mbedtls_base64_encode(NULL, 0, &base64_len, in_buf, in_buf_len);
 
-	encoded_buffer = (char *)malloc(base64_len + 1);
+	encoded_buffer = malloc(base64_len + 1);
 	if (!encoded_buffer) {
 		ree_log(REE_ERROR, "base64_encode failed to alloc buffer");
 		return NULL;
@@ -73,7 +73,7 @@ unsigned char *base64_decode(const char *in_buf, size_t in_buf_len,
 		needed = 1;
 	}
 
-	decoded_buffer = (unsigned char *)malloc(needed);
+	decoded_buffer = malloc(needed);
 	if (!decoded_buffer) {
 		ree_log(REE_ERROR, "base64_decode failed alloc");
 		return NULL;
