@@ -570,7 +570,8 @@ int handle_fde_operation(char *request_str)
 		return EXIT_FAILURE;
 	}
 	j_ret = json_object_object_get_ex(request_json, FDE_JSON_OP, &j_op);
-	if (j_ret == TRUE) {
+	if ((j_ret == TRUE) &&
+	    (json_type_string == json_object_get_type(j_op))) {
 		op = json_object_get_string(j_op);
 		// three operations are supported
 		// - FDE_JSON_OP_REVEAL
@@ -597,6 +598,7 @@ int handle_fde_operation(char *request_str)
 		}
 	} else {
 		ree_log(REE_ERROR, "json: parse: op failed");
+		ret = EXIT_FAILURE;
 	}
 	json_object_put(request_json);
 	return ret;
