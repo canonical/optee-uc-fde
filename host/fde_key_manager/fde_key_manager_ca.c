@@ -26,236 +26,239 @@
 
 #define MAX_BASE64_BUF_SIZE (MAX_BUF_SIZE / 3 * 4 + 4)
 // helper wrapper around mbedtls_base64_encode function
-char *base64_encode(const unsigned char *in_buf, size_t in_buf_len) {
-    int ret = EXIT_SUCCESS;
-    size_t base64_len = 0;
-    char *encoded_buffer = NULL;
+char *base64_encode(const unsigned char *in_buf, size_t in_buf_len)
+{
+	int ret = EXIT_SUCCESS;
+	size_t base64_len = 0;
+	char *encoded_buffer = NULL;
 
-    /* Probe for required output length */
-    mbedtls_base64_encode(NULL, 0, &base64_len, in_buf, in_buf_len);
+	/* Probe for required output length */
+	mbedtls_base64_encode(NULL, 0, &base64_len, in_buf, in_buf_len);
 
-    encoded_buffer = (char *)malloc(base64_len + 1);
-    if (!encoded_buffer) {
-        ree_log(REE_ERROR, "base64_encode failed to alloc buffer");
-        return NULL;
-    }
-    ret = mbedtls_base64_encode((unsigned char *)encoded_buffer,
-                                base64_len + 1,
-                                &base64_len,
-                                in_buf,
-                                in_buf_len);
-    if (ret) {
-        ree_log(REE_ERROR, "base64_encode failed with: 0x%x", ret);
-        free(encoded_buffer);
-        return NULL;
-    }
-    encoded_buffer[base64_len] = '\0';
-    return encoded_buffer;
+	encoded_buffer = (char *)malloc(base64_len + 1);
+	if (!encoded_buffer) {
+		ree_log(REE_ERROR, "base64_encode failed to alloc buffer");
+		return NULL;
+	}
+	ret = mbedtls_base64_encode((unsigned char *)encoded_buffer,
+				    base64_len + 1, &base64_len, in_buf,
+				    in_buf_len);
+	if (ret) {
+		ree_log(REE_ERROR, "base64_encode failed with: 0x%x", ret);
+		free(encoded_buffer);
+		return NULL;
+	}
+	encoded_buffer[base64_len] = '\0';
+	return encoded_buffer;
 }
 
 // helper wrapper around mbedtls_base64_decode function
-unsigned char *base64_decode(const char *in_buf, size_t in_buf_len, size_t *buf_len) {
-    int ret = EXIT_SUCCESS;
-    size_t needed = 0;
-    unsigned char *decoded_buffer = NULL;
+unsigned char *base64_decode(const char *in_buf, size_t in_buf_len,
+			     size_t *buf_len)
+{
+	int ret = EXIT_SUCCESS;
+	size_t needed = 0;
+	unsigned char *decoded_buffer = NULL;
 
-    if (strlen(in_buf) != in_buf_len) {
-        ree_log(REE_ERROR, "base64_decode: string lengths do not align");
-        return NULL;
-    }
+	if (strlen(in_buf) != in_buf_len) {
+		ree_log(REE_ERROR,
+			"base64_decode: string lengths do not align");
+		return NULL;
+	}
 
-    /* Probe for required output length */
-    mbedtls_base64_decode(NULL, 0, &needed,
-                          (const unsigned char *)in_buf, in_buf_len);
-    if (needed == 0)
-        needed = 1;
+	/* Probe for required output length */
+	mbedtls_base64_decode(NULL, 0, &needed, (const unsigned char *)in_buf,
+			      in_buf_len);
+	if (needed == 0)
+		needed = 1;
 
-    decoded_buffer = (unsigned char *)malloc(needed);
-    if (!decoded_buffer) {
-        ree_log(REE_ERROR, "base64_decode failed alloc");
-        return NULL;
-    }
-    ret = mbedtls_base64_decode(decoded_buffer,
-                                needed,
-                                buf_len,
-                                (const unsigned char *)in_buf,
-                                in_buf_len);
-    if (ret) {
-        ree_log(REE_ERROR, "base64_decode failed with: 0x%x", ret);
-        free(decoded_buffer);
-        return NULL;
-    }
-    return decoded_buffer;
+	decoded_buffer = (unsigned char *)malloc(needed);
+	if (!decoded_buffer) {
+		ree_log(REE_ERROR, "base64_decode failed alloc");
+		return NULL;
+	}
+	ret = mbedtls_base64_decode(decoded_buffer, needed, buf_len,
+				    (const unsigned char *)in_buf, in_buf_len);
+	if (ret) {
+		ree_log(REE_ERROR, "base64_decode failed with: 0x%x", ret);
+		free(decoded_buffer);
+		return NULL;
+	}
+	return decoded_buffer;
 }
 
-TEEC_Result invoke_command(uint32_t cmd_id, TEEC_Operation *operation) {
-    TEEC_Context context;
-    TEEC_Session session;
-    TEEC_Result ret = TEEC_ERROR_GENERIC;
-    TEEC_UUID svc_id = FDE_KEY_HANDLER_UUID_ID;
-    uint32_t origin;
+TEEC_Result invoke_command(uint32_t cmd_id, TEEC_Operation *operation)
+{
+	TEEC_Context context;
+	TEEC_Session session;
+	TEEC_Result ret = TEEC_ERROR_GENERIC;
+	TEEC_UUID svc_id = FDE_KEY_HANDLER_UUID_ID;
+	uint32_t origin;
 
-    ret = TEEC_InitializeContext(NULL, &context);
-    if (ret != TEEC_SUCCESS) {
-        fprintf(stderr, "TEEC_InitializeContext fail, result=0x%x\n", ret);
-        return ret;
-    }
+	ret = TEEC_InitializeContext(NULL, &context);
+	if (ret != TEEC_SUCCESS) {
+		fprintf(stderr, "TEEC_InitializeContext fail, result=0x%x\n",
+			ret);
+		return ret;
+	}
 
-    ret = TEEC_OpenSession(&context, &session, &svc_id,
-        TEEC_LOGIN_PUBLIC, NULL, NULL, &origin);
-    if (ret != TEEC_SUCCESS) {
-        fprintf(stderr, "TEEC_OpenSession failed, result=0x%x, origin=0x%x\n", ret, origin);
-        goto tag_exit_lock_ta_1;
-    }
+	ret = TEEC_OpenSession(&context, &session, &svc_id, TEEC_LOGIN_PUBLIC,
+			       NULL, NULL, &origin);
+	if (ret != TEEC_SUCCESS) {
+		fprintf(stderr,
+			"TEEC_OpenSession failed, result=0x%x, origin=0x%x\n",
+			ret, origin);
+		goto tag_exit_lock_ta_1;
+	}
 
-    ret = TEEC_InvokeCommand(&session, cmd_id, operation, &origin);
-    if (ret != TEEC_SUCCESS) {
-        fprintf(stderr, "TEEC_InvokeCommand fail, result=0x%x, origin=0x%x\n", ret, origin);
-    }
+	ret = TEEC_InvokeCommand(&session, cmd_id, operation, &origin);
+	if (ret != TEEC_SUCCESS) {
+		fprintf(stderr,
+			"TEEC_InvokeCommand fail, result=0x%x, origin=0x%x\n",
+			ret, origin);
+	}
 
-    TEEC_CloseSession(&session);
-    tag_exit_lock_ta_1:
-        TEEC_FinalizeContext(&context);
-    return ret;
+	TEEC_CloseSession(&session);
+tag_exit_lock_ta_1:
+	TEEC_FinalizeContext(&context);
+	return ret;
 }
 
 TEEC_Result encrypt_key(unsigned char *in_buf, size_t in_buf_len,
-                        unsigned char *handle, size_t *handle_len,
-                        unsigned char *out_buf, size_t *out_buf_len) {
-    TEEC_Operation operation;
-    TEEC_Result ret = TEEC_ERROR_GENERIC;
-    memset(&operation, 0x0, sizeof(operation));
-    operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
-                                            TEEC_MEMREF_TEMP_OUTPUT,
-                                            TEEC_MEMREF_TEMP_OUTPUT,
-                                            TEEC_NONE);
-    operation.params[0].tmpref.size = in_buf_len;
-    operation.params[0].tmpref.buffer = in_buf;
-    operation.params[1].tmpref.size = *handle_len;
-    operation.params[1].tmpref.buffer = handle;
-    operation.params[2].tmpref.size = *out_buf_len;
-    operation.params[2].tmpref.buffer = out_buf;
+			unsigned char *handle, size_t *handle_len,
+			unsigned char *out_buf, size_t *out_buf_len)
+{
+	TEEC_Operation operation;
+	TEEC_Result ret = TEEC_ERROR_GENERIC;
+	memset(&operation, 0x0, sizeof(operation));
+	operation.started = 1;
+	operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
+						TEEC_MEMREF_TEMP_OUTPUT,
+						TEEC_MEMREF_TEMP_OUTPUT,
+						TEEC_NONE);
+	operation.params[0].tmpref.size = in_buf_len;
+	operation.params[0].tmpref.buffer = in_buf;
+	operation.params[1].tmpref.size = *handle_len;
+	operation.params[1].tmpref.buffer = handle;
+	operation.params[2].tmpref.size = *out_buf_len;
+	operation.params[2].tmpref.buffer = out_buf;
 
-    ret = invoke_command(TA_CMD_KEY_ENCRYPT, &operation);
-    if (ret == TEEC_SUCCESS) {
-        *handle_len = operation.params[1].tmpref.size;
-        *out_buf_len = operation.params[2].tmpref.size;
-    }
-    return ret;
+	ret = invoke_command(TA_CMD_KEY_ENCRYPT, &operation);
+	if (ret == TEEC_SUCCESS) {
+		*handle_len = operation.params[1].tmpref.size;
+		*out_buf_len = operation.params[2].tmpref.size;
+	}
+	return ret;
 }
 
 TEEC_Result decrypt_key(unsigned char *in_buf, size_t in_buf_len,
-                        unsigned char *handle, size_t handle_len,
-                        unsigned char *out_buf, size_t *out_buf_len) {
-    TEEC_Operation operation;
-    TEEC_Result ret = TEEC_ERROR_GENERIC;
-    memset(&operation, 0x0, sizeof(operation));
-    operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
-                                            TEEC_MEMREF_TEMP_INPUT,
-                                            TEEC_MEMREF_TEMP_OUTPUT,
-                                            TEEC_NONE);
-    operation.params[0].tmpref.size = in_buf_len;
-    operation.params[0].tmpref.buffer = in_buf;
-    operation.params[1].tmpref.size = handle_len;
-    operation.params[1].tmpref.buffer = handle;
-    operation.params[2].tmpref.size = *out_buf_len;
-    operation.params[2].tmpref.buffer = out_buf;
+			unsigned char *handle, size_t handle_len,
+			unsigned char *out_buf, size_t *out_buf_len)
+{
+	TEEC_Operation operation;
+	TEEC_Result ret = TEEC_ERROR_GENERIC;
+	memset(&operation, 0x0, sizeof(operation));
+	operation.started = 1;
+	operation.paramTypes =
+		TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT, TEEC_MEMREF_TEMP_INPUT,
+				 TEEC_MEMREF_TEMP_OUTPUT, TEEC_NONE);
+	operation.params[0].tmpref.size = in_buf_len;
+	operation.params[0].tmpref.buffer = in_buf;
+	operation.params[1].tmpref.size = handle_len;
+	operation.params[1].tmpref.buffer = handle;
+	operation.params[2].tmpref.size = *out_buf_len;
+	operation.params[2].tmpref.buffer = out_buf;
 
-    ret = invoke_command(TA_CMD_KEY_DECRYPT, &operation);
-    if (ret == TEEC_SUCCESS) {
-        *out_buf_len = operation.params[2].tmpref.size;
-    }
-    return ret;
+	ret = invoke_command(TA_CMD_KEY_DECRYPT, &operation);
+	if (ret == TEEC_SUCCESS) {
+		*out_buf_len = operation.params[2].tmpref.size;
+	}
+	return ret;
 }
 
-TEEC_Result get_ta_lock(uint32_t *value) {
-    TEEC_Operation operation;
-    TEEC_Result ret = TEEC_ERROR_GENERIC;
+TEEC_Result get_ta_lock(uint32_t *value)
+{
+	TEEC_Operation operation;
+	TEEC_Result ret = TEEC_ERROR_GENERIC;
 
-    memset(&operation, 0x0, sizeof(operation));
-    operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_OUTPUT,
-                                            TEEC_NONE,
-                                            TEEC_NONE,
-                                            TEEC_NONE);
+	memset(&operation, 0x0, sizeof(operation));
+	operation.started = 1;
+	operation.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_OUTPUT, TEEC_NONE,
+						TEEC_NONE, TEEC_NONE);
 
-    ret = invoke_command(TA_CMD_GET_LOCK, &operation);
-    if (ret == TEEC_SUCCESS) {
-        *value = operation.params[0].value.a;
-    }
-    return ret;
+	ret = invoke_command(TA_CMD_GET_LOCK, &operation);
+	if (ret == TEEC_SUCCESS) {
+		*value = operation.params[0].value.a;
+	}
+	return ret;
 }
 
-TEEC_Result lock_ta() {
-    TEEC_Operation operation;
+TEEC_Result lock_ta()
+{
+	TEEC_Operation operation;
 
-    memset(&operation, 0x0, sizeof(operation));
-    operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_NONE,
-                                            TEEC_NONE,
-                                            TEEC_NONE,
-                                            TEEC_NONE);
+	memset(&operation, 0x0, sizeof(operation));
+	operation.started = 1;
+	operation.paramTypes =
+		TEEC_PARAM_TYPES(TEEC_NONE, TEEC_NONE, TEEC_NONE, TEEC_NONE);
 
-    return invoke_command(TA_CMD_LOCK, &operation);
+	return invoke_command(TA_CMD_LOCK, &operation);
 }
 
 // generate random buffer
-unsigned char *generate_rng(size_t len) {
-    TEEC_Operation operation;
-    TEEC_Result ret = TEEC_ERROR_GENERIC;
-    unsigned char * buf = NULL;
+unsigned char *generate_rng(size_t len)
+{
+	TEEC_Operation operation;
+	TEEC_Result ret = TEEC_ERROR_GENERIC;
+	unsigned char *buf = NULL;
 
-    buf  = malloc(len);
-    if (!buf){
-        fprintf(stderr, "rng buf alloc failed\n");
-        return NULL;
-    }
+	buf = malloc(len);
+	if (!buf) {
+		fprintf(stderr, "rng buf alloc failed\n");
+		return NULL;
+	}
 
-    memset(&operation, 0x0, sizeof(operation));
-    operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_OUTPUT,
-                                            TEEC_NONE,
-                                            TEEC_NONE,
-                                            TEEC_NONE);
-    operation.params[0].tmpref.size = len;
-    operation.params[0].tmpref.buffer = buf;
-    ret = invoke_command(TA_CMD_GEN_RANDOM, &operation);
-    if (TEEC_SUCCESS != ret) {
-        free(buf);
-        return NULL;
-    }
-    return buf;
+	memset(&operation, 0x0, sizeof(operation));
+	operation.started = 1;
+	operation.paramTypes = TEEC_PARAM_TYPES(
+		TEEC_MEMREF_TEMP_OUTPUT, TEEC_NONE, TEEC_NONE, TEEC_NONE);
+	operation.params[0].tmpref.size = len;
+	operation.params[0].tmpref.buffer = buf;
+	ret = invoke_command(TA_CMD_GEN_RANDOM, &operation);
+	if (TEEC_SUCCESS != ret) {
+		free(buf);
+		return NULL;
+	}
+	return buf;
 }
 
-TEEC_Result get_ta_version(uint32_t *version) {
-    TEEC_Operation operation;
-    TEEC_Result ret = TEEC_ERROR_GENERIC;
+TEEC_Result get_ta_version(uint32_t *version)
+{
+	TEEC_Operation operation;
+	TEEC_Result ret = TEEC_ERROR_GENERIC;
 
-    memset(&operation, 0x0, sizeof(operation));
-    operation.started = 1;
-    operation.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_OUTPUT,
-                                            TEEC_NONE,
-                                            TEEC_NONE,
-                                            TEEC_NONE);
+	memset(&operation, 0x0, sizeof(operation));
+	operation.started = 1;
+	operation.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_OUTPUT, TEEC_NONE,
+						TEEC_NONE, TEEC_NONE);
 
-    ret = invoke_command(TA_CMD_TA_VERSION, &operation);
-    if (ret == TEEC_SUCCESS) {
-        *version = operation.params[0].value.a;
-    }
-    return ret;
+	ret = invoke_command(TA_CMD_TA_VERSION, &operation);
+	if (ret == TEEC_SUCCESS) {
+		*version = operation.params[0].value.a;
+	}
+	return ret;
 }
 
-void ree_log(int log_level, const char *format, ...) {
-    va_list args;
-    char buf[2048];
+void ree_log(int log_level, const char *format, ...)
+{
+	va_list args;
+	char buf[2048];
 
-    if(log_level > REE_LOG_LEVEL) {
-        return;
-    }
-    va_start (args, format);
-    vsnprintf(buf, sizeof(buf), format, args);
-    va_end(args);
-    fprintf(stderr, "%s\n", buf);
+	if (log_level > REE_LOG_LEVEL) {
+		return;
+	}
+	va_start(args, format);
+	vsnprintf(buf, sizeof(buf), format, args);
+	va_end(args);
+	fprintf(stderr, "%s\n", buf);
 }
