@@ -10,17 +10,17 @@
 #include "fde_key_handler_ta_handle.h"
 
 // TA lock status
-static int _ta_lock;
+static int ta_lock;
 
-static TEE_Result lock_ta(uint32_t param_types,
+static TEE_Result lock_ta(uint32_t paramTypes,
 			  TEE_Param params[TEE_NUM_PARAMS]);
-static TEE_Result get_ta_lock(uint32_t param_types,
+static TEE_Result get_ta_lock(uint32_t paramTypes,
 			      TEE_Param params[TEE_NUM_PARAMS]);
 
 TEE_Result TA_CreateEntryPoint(void)
 {
 	DMSG("fde_key_handler: TA_CreateEntryPoint\n");
-	_ta_lock = TA_UNLOCKED;
+	ta_lock = TA_UNLOCKED;
 	return TEE_SUCCESS;
 }
 
@@ -36,10 +36,10 @@ TA_OpenSessionEntryPoint(uint32_t paramTypes,
 	return TEE_SUCCESS;
 }
 
-void TA_CloseSessionEntryPoint(void __maybe_unused *session_context)
+void TA_CloseSessionEntryPoint(void __maybe_unused *sessionContext)
 {
 	DMSG("fde_key_handler: TA_CloseSessionEntryPoint\n");
-	UNUSED(session_context);
+	UNUSED(sessionContext);
 }
 
 void TA_DestroyEntryPoint(void)
@@ -47,18 +47,18 @@ void TA_DestroyEntryPoint(void)
 	DMSG("fde_key_handler: TA_DestroyEntryPoint\n");
 }
 
-TEE_Result TA_InvokeCommandEntryPoint(void __maybe_unused *session_context,
-				      uint32_t cmd_id, uint32_t paramTypes,
+TEE_Result TA_InvokeCommandEntryPoint(void __maybe_unused *sessionContext,
+				      uint32_t commandID, uint32_t paramTypes,
 				      TEE_Param params[TEE_NUM_PARAMS])
 {
-	DLOG("FDE cmd_id = %#" PRIx32 "\n", cmd_id);
-	switch (cmd_id) {
+	DLOG("FDE cmd_id = %#" PRIx32 "\n", commandID);
+	switch (commandID) {
 	case TA_CMD_KEY_ENCRYPT:
 		return cmd_symmetric_key_crypto(TEE_MODE_ENCRYPT, paramTypes,
 						params);
 	case TA_CMD_KEY_DECRYPT:
 		// make sure crypto opperations are not locked
-		if (_ta_lock == TA_LOCKED) {
+		if (ta_lock == TA_LOCKED) {
 			EMSG("fde_key_handler: TA is locked for further decrypt oprerations!!");
 			return TEE_ERROR_ACCESS_DENIED;
 		}
@@ -75,7 +75,7 @@ TEE_Result TA_InvokeCommandEntryPoint(void __maybe_unused *session_context,
 	default:
 		EMSG("fde_key_handler: Command ID %#" PRIx32
 		     " is not supported",
-		     cmd_id);
+		     commandID);
 		return TEE_ERROR_NOT_SUPPORTED;
 	}
 }
@@ -85,11 +85,12 @@ static TEE_Result lock_ta(uint32_t paramTypes, TEE_Param params[TEE_NUM_PARAMS])
 	UNUSED(params);
 	if (paramTypes !=
 	    TEE_PARAM_TYPES(TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE,
-			    TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE))
+			    TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE)) {
 		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
 	DMSG("fde_key_handler: Locking TA for further use\n");
-	_ta_lock = TA_LOCKED;
+	ta_lock = TA_LOCKED;
 	return TEE_SUCCESS;
 }
 
@@ -98,9 +99,10 @@ static TEE_Result get_ta_lock(uint32_t paramTypes,
 {
 	if (paramTypes !=
 	    TEE_PARAM_TYPES(TEE_PARAM_TYPE_VALUE_OUTPUT, TEE_PARAM_TYPE_NONE,
-			    TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE))
+			    TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE)) {
 		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
-	params[0].value.a = _ta_lock;
+	params[0].value.a = ta_lock;
 	return TEE_SUCCESS;
 }

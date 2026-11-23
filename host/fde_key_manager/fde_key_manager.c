@@ -3,6 +3,7 @@
  * Copyright 2025, Canonical Ltd.
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +17,7 @@
 #include "fde_key_handler_ta_type.h"
 #include "fde_key_manager_ca.h"
 
-#define MAX_JSON_BUF_SIZE (1024 * 10)
+#define MAX_JSON_BUF_SIZE ((size_t)1024 * 10)
 
 #define FDE_SETUP "fde-setup"
 #define FDE_REVEAL_KEY "fde-reveal-key"
@@ -34,10 +35,10 @@
 #define FDE_JSON_HANDLE "handle"
 #define FDE_JSON_RESULT_FEATURES "{\"features\":[]}"
 
-#if !defined(TRUE)
+#ifndef TRUE
 #define TRUE ((json_bool)1)
 #endif
-#if !defined(FALSE)
+#ifndef FALSE
 #define FALSE ((json_bool)0)
 #endif
 
@@ -90,7 +91,7 @@ char *get_snap_hook_fde_setup_request(void)
 	return request;
 }
 
-int set_snap_hook_fde_setup_request_result(const unsigned char *result, int len)
+int set_snap_hook_fde_setup_request_result(const char *result, size_t len)
 {
 	FILE *out_stream = NULL;
 	int ret = EXIT_SUCCESS;
@@ -117,19 +118,18 @@ int set_snap_hook_fde_setup_request_result(const unsigned char *result, int len)
 	return ret;
 }
 
-int set_result(const unsigned char *result, int len)
+int set_result(const char *result, size_t len)
 {
 	int ret = 0;
 	if (snapctl_output) {
 		return set_snap_hook_fde_setup_request_result(result, len);
-	} else {
-		ret = fprintf(stdout, "%s\n", result);
-		// ret has number of written bytes, only check report fail / success
-		if (ret > 0) {
-			ret = EXIT_SUCCESS;
-		}
-		return ret;
 	}
+	ret = fprintf(stdout, "%s\n", result);
+	// ret has number of written bytes, only check report fail / success
+	if (ret > 0) {
+		ret = EXIT_SUCCESS;
+	}
+	return ret;
 }
 
 char *get_initrd_fde_request()
@@ -174,6 +174,7 @@ int handle_operation_reveal(struct json_object *request_json)
 	size_t unsealed_key_buf_len = 0;
 	char *unsealed_key = NULL;
 	const char *result = NULL;
+	TEEC_Result res = TEEC_SUCCESS;
 
 	// get other request data:
 	//   FDE_JSON_SEALED_KEY | FDE_JSON_HANDLE
@@ -221,12 +222,13 @@ int handle_operation_reveal(struct json_object *request_json)
 		goto cleanup;
 	}
 
-	ret = decrypt_key(sealed_key_buf, sealed_key_buf_len, handle_buf,
+	res = decrypt_key(sealed_key_buf, sealed_key_buf_len, handle_buf,
 			  handle_buf_len, unsealed_key_buf,
 			  &unsealed_key_buf_len);
-	if (ret) {
+	if (res != TEEC_SUCCESS) {
 		ree_log(REE_ERROR, "Key decrypt crypto operation failed: 0x%X",
-			ret);
+			res);
+		ret = EXIT_FAILURE;
 		goto cleanup;
 	}
 
@@ -255,10 +257,12 @@ int handle_operation_reveal(struct json_object *request_json)
 	set_result(result, strlen(result));
 
 cleanup:
-	if (sealed_key_buf)
+	if (sealed_key_buf) {
 		free(sealed_key_buf);
-	if (handle_buf)
+	}
+	if (handle_buf) {
 		free(handle_buf);
+	}
 	if (unsealed_key_buf) {
 		explicit_bzero(unsealed_key_buf, unsealed_key_buf_len);
 		free(unsealed_key_buf);
@@ -267,17 +271,25 @@ cleanup:
 		explicit_bzero(unsealed_key, strlen(unsealed_key));
 		free(unsealed_key);
 	}
-	if (j_response)
+	if (j_response) {
 		json_object_put(j_response);
-	if (j_unsealed_key)
+	}
+	if (j_unsealed_key) {
 		json_object_put(j_unsealed_key);
+	}
 
 	return ret;
 }
 
 int handle_operation_lock(void)
 {
-	return lock_ta();
+	TEEC_Result res = lock_ta();
+
+	if (res != TEEC_SUCCESS) {
+		ree_log(REE_ERROR, "Locking the TA failed: 0x%X", res);
+		return EXIT_FAILURE;
+	}
+	return EXIT_SUCCESS;
 }
 
 int handle_operation_setup(struct json_object *request_json)
@@ -298,6 +310,7 @@ int handle_operation_setup(struct json_object *request_json)
 	char *sealed_key = NULL;
 	char *handle = NULL;
 	const char *result = NULL;
+	TEEC_Result res = TEEC_SUCCESS;
 
 	// get other request data:
 	// FDE_JSON_KEY | FDE_JSON_KEY_NAME
@@ -344,12 +357,13 @@ int handle_operation_setup(struct json_object *request_json)
 		goto cleanup;
 	}
 
-	ret = encrypt_key(unsealed_key_buf, unsealed_key_buf_len, handle_buf,
+	res = encrypt_key(unsealed_key_buf, unsealed_key_buf_len, handle_buf,
 			  &handle_buf_len, sealed_key_buf, &sealed_key_buf_len);
 
-	if (ret) {
+	if (res != TEEC_SUCCESS) {
 		ree_log(REE_ERROR, "Key encrypt crypto operation failed: 0x%X",
-			ret);
+			res);
+		ret = EXIT_FAILURE;
 		goto cleanup;
 	}
 
@@ -394,22 +408,28 @@ int handle_operation_setup(struct json_object *request_json)
 	ret = set_result(result, strlen(result));
 
 cleanup:
-	if (handle_buf)
+	if (handle_buf) {
 		free(handle_buf);
-	if (sealed_key_buf)
+	}
+	if (sealed_key_buf) {
 		free(sealed_key_buf);
+	}
 	if (unsealed_key_buf) {
 		explicit_bzero(unsealed_key_buf, unsealed_key_buf_len);
 		free(unsealed_key_buf);
 	}
-	if (sealed_key)
+	if (sealed_key) {
 		free(sealed_key);
-	if (handle)
+	}
+	if (handle) {
 		free(handle);
-	if (j_response)
+	}
+	if (j_response) {
 		json_object_put(j_response);
-	if (j_sealed_key)
+	}
+	if (j_sealed_key) {
 		json_object_put(j_sealed_key);
+	}
 
 	return ret;
 }
@@ -428,6 +448,7 @@ int encrypt_decrypt_selftest()
 	char *base64_key = NULL;
 	char *sealed_key = NULL;
 	char *unsealed_key = NULL;
+	TEEC_Result res = TEEC_SUCCESS;
 
 	key_buf_len = HANDLE_SIZE;
 	key_buf = generate_rng(key_buf_len);
@@ -457,11 +478,12 @@ int encrypt_decrypt_selftest()
 		goto cleanup;
 	}
 
-	ret = encrypt_key(key_buf, key_buf_len, handle_buf, &handle_buf_len,
+	res = encrypt_key(key_buf, key_buf_len, handle_buf, &handle_buf_len,
 			  sealed_key_buf, &sealed_key_buf_len);
-	if (ret) {
+	if (res != TEEC_SUCCESS) {
 		ree_log(REE_ERROR, "Key encrypt crypto operation failed: 0x%X",
-			ret);
+			res);
+		ret = EXIT_FAILURE;
 		goto cleanup;
 	}
 
@@ -478,12 +500,13 @@ int encrypt_decrypt_selftest()
 	unsealed_key_buf_len = MAX_BUF_SIZE;
 	unsealed_key_buf = (unsigned char *)malloc(unsealed_key_buf_len);
 
-	ret = decrypt_key(sealed_key_buf, sealed_key_buf_len, handle_buf,
+	res = decrypt_key(sealed_key_buf, sealed_key_buf_len, handle_buf,
 			  handle_buf_len, unsealed_key_buf,
 			  &unsealed_key_buf_len);
-	if (ret) {
+	if (res != TEEC_SUCCESS) {
 		ree_log(REE_ERROR, "Key decrypt crypto operation failed: 0x%X",
-			ret);
+			res);
+		ret = EXIT_FAILURE;
 		goto cleanup;
 	}
 
@@ -501,18 +524,22 @@ cleanup:
 		explicit_bzero(key_buf, key_buf_len);
 		free(key_buf);
 	}
-	if (base64_key)
+	if (base64_key) {
 		free(base64_key);
-	if (handle_buf)
+	}
+	if (handle_buf) {
 		free(handle_buf);
-	if (sealed_key_buf)
+	}
+	if (sealed_key_buf) {
 		free(sealed_key_buf);
+	}
 	if (unsealed_key_buf) {
 		explicit_bzero(unsealed_key_buf, unsealed_key_buf_len);
 		free(unsealed_key_buf);
 	}
-	if (sealed_key)
+	if (sealed_key) {
 		free(sealed_key);
+	}
 	if (unsealed_key) {
 		explicit_bzero(unsealed_key, strlen(unsealed_key));
 		free(unsealed_key);
@@ -521,7 +548,7 @@ cleanup:
 	return ret;
 }
 
-int handle_operation_feature(struct json_object *request_json)
+int handle_operation_feature(void)
 {
 	// this operation is not supported, return default empty output
 	return set_result(FDE_JSON_RESULT_FEATURES,
@@ -561,7 +588,7 @@ int handle_fde_operation(char *request_str)
 			ret = handle_operation_setup(request_json);
 		} else if (!strncmp(op, FDE_JSON_OP_FEATURES,
 				    strlen(FDE_JSON_OP_FEATURES))) {
-			ret = handle_operation_feature(request_json);
+			ret = handle_operation_feature();
 		} else {
 			ree_log(REE_ERROR, "Unknown operation requested:[%s]",
 				op);
@@ -614,6 +641,8 @@ int main(int argc, char *argv[])
 	char *request_str = NULL;
 	size_t buf_len = 0;
 	uint32_t ta_version = 0;
+	TEEC_Result res = TEEC_SUCCESS;
+	char *end = NULL;
 	baseName = basename(argv[0]);
 	ree_log(REE_INFO, "main: %s entry point", baseName);
 	if (argc == 1) {
@@ -660,24 +689,34 @@ int main(int argc, char *argv[])
      *  --help: print help
      */
 	if (!strcmp("--ta-lock-status", argv[1])) {
-		ret = get_ta_lock(&lock);
-		if (ret == TEEC_SUCCESS) {
+		res = get_ta_lock(&lock);
+		if (res == TEEC_SUCCESS) {
 			printf("Lock status: %s\n",
 			       lock ? "LOCKED" : "UNLOCKED");
 		} else {
-			printf("TA operation fail, ret 0x%x\n", ret);
+			printf("TA operation fail, ret 0x%x\n", res);
+			ret = EXIT_FAILURE;
 		}
 	} else if (!strcmp("--lock-ta", argv[1])) {
-		ret = lock_ta();
-		if (ret == TEEC_SUCCESS) {
+		res = lock_ta();
+		if (res == TEEC_SUCCESS) {
 			printf("TA is now locked\n");
 		} else {
-			printf("TA operation fail, ret 0x%x\n", ret);
+			printf("TA operation fail, ret 0x%x\n", res);
+			ret = EXIT_FAILURE;
 		}
 	} else if (!strcmp("--generate-random", argv[1])) {
 		// check if there is extra arg, which would be desired buf size
 		if (argc > 2) {
-			buf_len = atoi(argv[2]);
+			errno = 0;
+			buf_len = strtoul(argv[2], &end, 10);
+			if (errno || end == argv[2] || *end != '\0' ||
+			    argv[2][0] == '-' || buf_len == 0) {
+				printf("error: invalid buffer size (%s).\n",
+				       argv[2]);
+				ret = EXIT_FAILURE;
+				goto cleanup;
+			}
 		} else {
 			buf_len = HANDLE_SIZE;
 		}
@@ -698,16 +737,16 @@ int main(int argc, char *argv[])
 		}
 	} else if (!strcmp("--encrypt-decrypt-selftest", argv[1])) {
 		ret = encrypt_decrypt_selftest();
-		if (ret != TEEC_SUCCESS) {
-			printf("Failed to pass encrypt and decrypt selftest, ret 0x%x\n",
-			       ret);
+		if (ret != EXIT_SUCCESS) {
+			printf("Failed to pass encrypt and decrypt selftest\n");
 		}
 	} else if (!strcmp("--get-ta-version", argv[1])) {
-		ret = get_ta_version(&ta_version);
-		if (ret == TEEC_SUCCESS) {
+		res = get_ta_version(&ta_version);
+		if (res == TEEC_SUCCESS) {
 			printf("TA version: 0x%X\n", ta_version);
 		} else {
-			printf("Failed to get TA version, ret 0x%x\n", ret);
+			printf("Failed to get TA version, ret 0x%x\n", res);
+			ret = EXIT_FAILURE;
 		}
 	} else if (!strcmp("--help", argv[1])) {
 		print_help();

@@ -69,8 +69,9 @@ unsigned char *base64_decode(const char *in_buf, size_t in_buf_len,
 	/* Probe for required output length */
 	mbedtls_base64_decode(NULL, 0, &needed, (const unsigned char *)in_buf,
 			      in_buf_len);
-	if (needed == 0)
+	if (needed == 0) {
 		needed = 1;
+	}
 
 	decoded_buffer = (unsigned char *)malloc(needed);
 	if (!decoded_buffer) {

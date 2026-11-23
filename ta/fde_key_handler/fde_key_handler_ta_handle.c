@@ -163,8 +163,9 @@ static TEE_Result do_key_crypto(TEE_OperationMode mode, uint8_t *in,
 
 	res = TEE_AllocateOperation(&crypto_op, TEE_ALG_AES_GCM, mode,
 				    sizeof(huk_key) * 8);
-	if (res)
+	if (res) {
 		return res;
+	}
 
 	res = derive_ta_unique_key(huk_key, sizeof(huk_key), handle->nonce,
 				   sizeof(handle->nonce));
@@ -176,8 +177,9 @@ static TEE_Result do_key_crypto(TEE_OperationMode mode, uint8_t *in,
 
 	res = TEE_AllocateTransientObject(TEE_TYPE_AES, sizeof(huk_key) * 8,
 					  &hkey);
-	if (res)
+	if (res) {
 		goto out_op;
+	}
 
 	attr.attributeID = TEE_ATTR_SECRET_VALUE;
 	attr.content.ref.buffer = huk_key;
@@ -235,14 +237,16 @@ TEE_Result cmd_symmetric_key_crypto(TEE_OperationMode mode,
 		if (paramTypes != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
 						  TEE_PARAM_TYPE_MEMREF_OUTPUT,
 						  TEE_PARAM_TYPE_MEMREF_OUTPUT,
-						  TEE_PARAM_TYPE_NONE))
+						  TEE_PARAM_TYPE_NONE)) {
 			return TEE_ERROR_BAD_PARAMETERS;
+		}
 	} else if (mode == TEE_MODE_DECRYPT) {
 		if (paramTypes != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_INPUT,
 						  TEE_PARAM_TYPE_MEMREF_INPUT,
 						  TEE_PARAM_TYPE_MEMREF_OUTPUT,
-						  TEE_PARAM_TYPE_NONE))
+						  TEE_PARAM_TYPE_NONE)) {
 			return TEE_ERROR_BAD_PARAMETERS;
+		}
 	} else {
 		return TEE_ERROR_BAD_PARAMETERS;
 	}
@@ -272,8 +276,9 @@ TEE_Result cmd_symmetric_key_crypto(TEE_OperationMode mode,
 		// single session, generate all randomness in one go.
 		rng_buf =
 			TEE_Malloc(IV_SIZE + NONCE_SIZE, TEE_MALLOC_FILL_ZERO);
-		if (!rng_buf)
+		if (!rng_buf) {
 			return TEE_ERROR_OUT_OF_MEMORY;
+		}
 
 		TEE_GenerateRandom(rng_buf, IV_SIZE + NONCE_SIZE);
 		memcpy(handle->iv, rng_buf, IV_SIZE);
@@ -313,15 +318,18 @@ TEE_Result generate_random(uint32_t types, TEE_Param params[TEE_NUM_PARAMS])
 
 	if (types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_MEMREF_OUTPUT,
 				     TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE,
-				     TEE_PARAM_TYPE_NONE))
+				     TEE_PARAM_TYPE_NONE)) {
 		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
-	if (!params[0].memref.buffer || !params[0].memref.size)
+	if (!params[0].memref.buffer || !params[0].memref.size) {
 		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
 	rng_buf = TEE_Malloc(params[0].memref.size, TEE_MALLOC_FILL_ZERO);
-	if (!rng_buf)
+	if (!rng_buf) {
 		return TEE_ERROR_OUT_OF_MEMORY;
+	}
 
 	TEE_GenerateRandom(rng_buf, params[0].memref.size);
 	memcpy(params[0].memref.buffer, rng_buf, params[0].memref.size);
@@ -337,8 +345,9 @@ TEE_Result get_ta_version(uint32_t types, TEE_Param params[TEE_NUM_PARAMS])
 	DMSG("get_ta_version");
 	if (types != TEE_PARAM_TYPES(TEE_PARAM_TYPE_VALUE_OUTPUT,
 				     TEE_PARAM_TYPE_NONE, TEE_PARAM_TYPE_NONE,
-				     TEE_PARAM_TYPE_NONE))
+				     TEE_PARAM_TYPE_NONE)) {
 		return TEE_ERROR_BAD_PARAMETERS;
+	}
 
 	params[0].value.a = FDE_TA_VERSION_V1;
 	return TEE_SUCCESS;
