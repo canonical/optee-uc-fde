@@ -39,6 +39,25 @@ jobs:
         run: |
           make tidy
 
+  unit-test:
+    name: unit-test (cmocka)
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libcmocka-dev libjson-c-dev pkgconf
+      - name: Run unit tests
+        run: |
+          make unit-test
+
   spread:
     name: spread (QEMU, OP-TEE)
     runs-on: ubuntu-26.04-arm
