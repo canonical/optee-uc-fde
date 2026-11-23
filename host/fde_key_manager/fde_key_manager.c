@@ -15,6 +15,7 @@
 #include <json-c/json.h>
 
 #include "fde_key_handler_ta_type.h"
+#include "fde_key_manager.h"
 #include "fde_key_manager_ca.h"
 
 #define MAX_JSON_BUF_SIZE ((size_t)1024 * 10)
@@ -132,7 +133,7 @@ int set_result(const char *result, size_t len)
 	return ret;
 }
 
-char *get_initrd_fde_request()
+char *get_initrd_fde_request(void)
 {
 	ssize_t b_read = 0;
 	size_t size_remaining = 0;
@@ -140,7 +141,7 @@ char *get_initrd_fde_request()
 	char *pos = NULL;
 
 	ree_log(REE_DEBUG, "get_initrd_fde_request");
-	request = (char *)malloc(MAX_JSON_BUF_SIZE);
+	request = malloc(MAX_JSON_BUF_SIZE);
 	if (!request) {
 		ree_log(REE_ERROR, "Failed to allocate request buffer");
 		return NULL;
@@ -215,7 +216,7 @@ int handle_operation_reveal(struct json_object *request_json)
 
 	// call crypto operation
 	unsealed_key_buf_len = MAX_BUF_SIZE;
-	unsealed_key_buf = (unsigned char *)malloc(unsealed_key_buf_len);
+	unsealed_key_buf = malloc(unsealed_key_buf_len);
 	if (!unsealed_key_buf) {
 		ree_log(REE_ERROR, "unsealed_key buf alloc failed");
 		ret = EXIT_FAILURE;
@@ -342,9 +343,9 @@ int handle_operation_setup(struct json_object *request_json)
 
 	// encrypt key
 	handle_buf_len = HANDLE_SIZE;
-	handle_buf = (char *)malloc(HANDLE_SIZE);
+	handle_buf = malloc(HANDLE_SIZE);
 	sealed_key_buf_len = MAX_BUF_SIZE;
-	sealed_key_buf = (char *)malloc(MAX_BUF_SIZE);
+	sealed_key_buf = malloc(MAX_BUF_SIZE);
 	if (!sealed_key_buf) {
 		ree_log(REE_ERROR, "sealed_key buf alloc failed");
 		ret = EXIT_FAILURE;
@@ -434,7 +435,7 @@ cleanup:
 	return ret;
 }
 
-int encrypt_decrypt_selftest()
+int encrypt_decrypt_selftest(void)
 {
 	int ret = EXIT_SUCCESS;
 	unsigned char *key_buf = NULL;
@@ -469,9 +470,9 @@ int encrypt_decrypt_selftest()
 
 	// encrypt key
 	handle_buf_len = HANDLE_SIZE;
-	handle_buf = (char *)malloc(HANDLE_SIZE);
+	handle_buf = malloc(HANDLE_SIZE);
 	sealed_key_buf_len = MAX_BUF_SIZE;
-	sealed_key_buf = (char *)malloc(MAX_BUF_SIZE);
+	sealed_key_buf = malloc(MAX_BUF_SIZE);
 	if (!sealed_key_buf) {
 		ree_log(REE_ERROR, "sealed_key buf alloc failed");
 		ret = EXIT_FAILURE;
@@ -498,7 +499,7 @@ int encrypt_decrypt_selftest()
 
 	// call crypto operation
 	unsealed_key_buf_len = MAX_BUF_SIZE;
-	unsealed_key_buf = (unsigned char *)malloc(unsealed_key_buf_len);
+	unsealed_key_buf = malloc(unsealed_key_buf_len);
 
 	res = decrypt_key(sealed_key_buf, sealed_key_buf_len, handle_buf,
 			  handle_buf_len, unsealed_key_buf,
@@ -631,7 +632,7 @@ int handle_fde_operation(char *request_str)
  *       - request: {"op":"features"}
  *       - result: {"features": []}
  */
-int main(int argc, char *argv[])
+int fde_key_manager_main(int argc, char *argv[])
 {
 	int ret = EXIT_SUCCESS;
 	uint32_t lock = 0;
@@ -666,7 +667,7 @@ int main(int argc, char *argv[])
 		} else {
 			ree_log(REE_ERROR, "Unknown invocation");
 			print_help();
-			exit(0);
+			return EXIT_FAILURE;
 		}
 		if (request_str) {
 			ret = handle_fde_operation(request_str);
